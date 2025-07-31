@@ -1,0 +1,51 @@
+data:
+  dataset_root: /data/Neidhardt/mandible_data
+  trajectories_train:
+    - traj_slice_y_no_oof_train.csv
+    - traj_slice_z_no_oof_train.csv
+    # - traj_slice_y_occ_train.csv
+  trajectories_valid:
+    - traj_slice_y_no_oof_valid.csv
+    - traj_slice_z_no_oof_valid.csv
+    # - traj_slice_y_occ_valid.csv
+  trajectories_test:
+    - traj_slice_y_no_oof_test.csv
+    - traj_slice_z_no_oof_test.csv
+    # - traj_slice_y_occ_test.csv
+    # - traj_random6.csv
+    # - traj_random7.csv
+    # - traj_random8.csv
+    # - traj_random9.csv
+    # - traj_random10.csv
+    # - traj_random6_occ.csv
+    # - traj_random7_occ.csv
+    # - traj_random8_occ.csv
+    # - traj_random9_occ.csv
+    # - traj_random10_occ.csv
+  resize_img:
+    img_h: 1200
+    img_w: 1920
+  grayscale: False
+  rescale_pos: True
+training:
+  sub_model: 'resnet18' # 'resnet18' 'efficientnet-b0'
+  weights_file_addon: "mask"  # Weights saved in f"{subnet_name}_{cam_str}cams_{nb_hidden}_{weights_file_addon}"
+  use_pretrained: False
+  pre_trained_weights: "" # "resnet18_lrscams_256_grayscale_no_oof"
+  cam_inputs:
+    - Left_Mask
+    - Right_Mask
+    # - Side_crop # center_rmBackground # Side
+  num_fc_hidden_units: 256
+  train_bs: 6
+  valid_bs: 4
+  test_bs: 2
+  max_epochs: 30
+  patience: 2
+  lr: 0.01
+  lr_scheduler:
+    step_size: 3
+    gamma: 0.1
+wandb:
+  wandb_log: True
+  project_name: 'Mandible-tracking' # 'Test-project'  'Mandible-tracking'
