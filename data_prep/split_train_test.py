@@ -19,17 +19,18 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     if args.config_path is None:
-        if platform == "linux" or platform == "linux2":
-            args.config_path = pathlib.Path('../config.yaml')
-        elif platform == "win32":
-            args.config_path = pathlib.Path('../config_windows.yaml')
+        args.config_path = pathlib.Path('../config.yaml')
     config_file = pathlib.Path(args.config_path)
+
     if not config_file.exists():
         print(f'Config file not found at {args.config_path}')
         raise SystemExit(1)
-    configs = utils.load_configs(config_file)
 
-    dataset_root = pathlib.Path(configs['data']['dataset_root'])
+    configs = utils.load_configs(config_file)
+    if platform == "linux" or platform == "linux2":
+        dataset_root = pathlib.Path(configs['data']['dataset_root_linux'])
+    elif platform == "win32":
+        dataset_root = pathlib.Path(configs['data']['dataset_root_windows'])
     ds_split = configs['data']['ds_split']
     labels = configs['data']['labels']
     ascan_per_group = configs['data']['ascan_per_group']

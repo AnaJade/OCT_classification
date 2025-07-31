@@ -1,0 +1,18 @@
+# !pip install -r requirements.txt
+# platform: linux-64
+
+addict==2.4.0
+h5py==3.12.1
+lmdb==1.6.2
+matplotlib==3.10.0
+numpy==2.2.2
+opencv==4.10.0
+openpyxl==3.1.5
+pathlib==1.0.1
+pandas==2.2.3
+pyyaml==6.0.2
+scikit-learn==1.6.1
+scipy==1.15.1
+tensorboard==2.19.0
+tqdm==4.67.0
+

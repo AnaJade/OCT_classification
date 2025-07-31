@@ -11,6 +11,7 @@ from sys import platform
 import utils
 from utils_data import open_mat_file
 
+
 if __name__ == '__main__':
 
     # Set up the argument parser
@@ -21,10 +22,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     if args.config_path is None:
-        if platform == "linux" or platform == "linux2":
-            args.config_path = pathlib.Path('../config.yaml')
-        elif platform == "win32":
-            args.config_path = pathlib.Path('../config_windows.yaml')
+        args.config_path = pathlib.Path('../config.yaml')
     config_file = pathlib.Path(args.config_path)
 
     if not config_file.exists():
@@ -32,7 +30,10 @@ if __name__ == '__main__':
         raise SystemExit(1)
 
     configs = utils.load_configs(config_file)
-    dataset_root = pathlib.Path(configs['data']['dataset_root'])
+    if platform == "linux" or platform == "linux2":
+        dataset_root = pathlib.Path(configs['data']['dataset_root_linux'])
+    elif platform == "win32":
+        dataset_root = pathlib.Path(configs['data']['dataset_root_windows'])
     ascan_per_group = configs['data']['ascan_per_group']
     labels = configs['data']['labels']
     use_mini_dataset = configs['data']['use_mini_dataset']
@@ -51,10 +52,13 @@ if __name__ == '__main__':
         # Keep only s8 files
         raw_mat_files = [fm for fm in raw_mat_files if '_s8_' in fm.__str__()]
         # Sample 4 areas from each label
+        """
         raw_file_per_label = {l: [fm for fm in raw_mat_files if l in fm.__str__()] for l in labels}
         areas_to_keep = {lbl:list(set([fm.parts[-2].split('_')[-1] for fm in files])) for (lbl, files) in raw_file_per_label.items()}
         areas_to_keep = {lbl: random.sample(areas, 4) for (lbl, areas) in areas_to_keep.items()}
         raw_files = [fm for (lbl, areas) in areas_to_keep.items() for area in areas for fm in raw_mat_files if area+"_" in fm.__str__() and lbl in fm.__str__()]
+        """
+        raw_files = raw_mat_files
         print(f"Keeping {len(raw_files)} areas over {len(labels)} labels.")
     else:
         raw_files = raw_mat_files

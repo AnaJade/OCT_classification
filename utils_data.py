@@ -403,6 +403,7 @@ def find_keywords(df: pd.DataFrame, col: str, keywords: list) -> pd.DataFrame:
     :return: Returns the df with extra columns: total keywords found + one per keyword
     """
     # Init new cols
+    df = df.copy()
     df.loc[:, 'keyword_count'] = 0
     df.loc[:, [w for w in keywords]] = 0
 
@@ -434,7 +435,6 @@ if __name__ == '__main__':
     ascan_per_group = configs['data']['ascan_per_group']
     use_mini_dataset = configs['data']['use_mini_dataset']
     map_df_paths ={split: dataset_root.joinpath(f"{split}{'Mini' if use_mini_dataset else ''}_mapping_{ascan_per_group}scans.csv") for split in ['train', 'valid', 'test']}
-
 
 
     # Create dataset object

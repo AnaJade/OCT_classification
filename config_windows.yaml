@@ -1,5 +1,6 @@
 data:
-  dataset_root: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
+  dataset_root_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
+  dataset_root_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
   ds_split: [0.6, 0.15, 0.25]
   labels:
     - chicken_heart
@@ -28,7 +29,8 @@ training:
 SPICE:
   MoCo:
     dataset_name: 'oct'  # [stl10, cifar10, cifar100] # TODO: Add option for OCT data
-    dataset_path: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+    dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+    dataset_path_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
     # img_size: 96 # Set automatically, Image size of the corresponding dataset
     use_all: False   # True: Use train + test, False: Use only train
     base_model: 'resnet18' # 'clusterresnet'
