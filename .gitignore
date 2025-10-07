@@ -4,3 +4,5 @@ SPICE.zip
 brouillon.ipynb
 SPICE/tools/results/*
 data_prep/df_split_dbg.xlsx
+nvidia-bug-report.log.gz
+nvidia-debugdump-temp2119908.log

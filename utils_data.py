@@ -34,7 +34,7 @@ from SPICE.fixmatch.datasets.data_utils import get_onehot
 
 
 class OCTDataset(Dataset): # Used in train_moco
-    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, transforms=None, preload_data=False):
+    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, transforms=None, preload_data=False, pre_shuffle=True, pre_sample=1):
         """
         Dataset object used to pass images to a siamese network
         :param root: dataset root path
@@ -43,6 +43,8 @@ class OCTDataset(Dataset): # Used in train_moco
         :param labels_dict: int to string label conversion
         :param transforms: Set of transforms that will be applied to each image before being used as input by the model
         :param preload_data: Whether to preload and save all the data into class variables
+        :param pre_shuffle: Whether to shuffle the images once at the beginning
+        :param pre_sample: Ratio of images to be kept
         """
         self.root = root
         # self.map_df_paths = map_df_paths
@@ -51,6 +53,8 @@ class OCTDataset(Dataset): # Used in train_moco
         self.label_dict = labels_dict
         self.map_df = pd.read_csv(self.map_df)
         self.preload_data = preload_data
+        self.pre_shuffle = pre_shuffle
+        self.pre_sample = pre_sample
         self.data = None
         self.labels = None
 
@@ -76,6 +80,15 @@ class OCTDataset(Dataset): # Used in train_moco
             self.data = [cv2.imread(self.root.joinpath(self.map_df['img_relative_path'].iloc[i])) for i in range(len(self.map_df))]
             self.labels = [self.map_df['label'].iloc[i] for i in range(len(self.map_df))]
 
+        if self.pre_sample < 1:
+            self.map_df.loc[:, 'area'] = [s.parts[1] for s in self.map_df.loc[:, 'img_relative_path']]
+            self.map_df.loc[:, 'traj'] = ['_'.join(s.stem.split('_')[:-2]) for s in self.map_df.loc[:, 'img_relative_path']]
+            self.map_df = self.map_df.groupby(['label_str', 'area', 'traj']).sample(frac=self.pre_sample)
+            self.map_df = self.map_df.drop(columns=['area', 'traj'])
+
+        if self.pre_shuffle:
+            self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
+
     def __len__(self):
         return len(self.map_df)
 
@@ -95,11 +108,13 @@ class OCTDataset(Dataset): # Used in train_moco
             # data = np.expand_dims(data[scan_idx_start:scan_idx_end, :].T, 0)
             # data = np.expand_dims(data[0:10000, :].T, 0)
             # data.shape = (512, 5000, 3)
-            data = cv2.imread(scan_path)# , cv2.IMREAD_GRAYSCALE)
+            data = cv2.imread(scan_path)# , cv2.IMREAD_GRAYSCALE) # shape: (512, 512, 3)
+            # data = cv2.imread(scan_path, cv2.IMREAD_GRAYSCALE)
 
             # doing this so that it is consistent with all other datasets
             # to return a PIL Image
             data = Image.fromarray(data)
+            # data = Image.fromarray(data, 'L')
             """
             try:
                 data = Image.fromarray(data) # , mode='L')
@@ -121,7 +136,7 @@ class OCTDataset(Dataset): # Used in train_moco
 
 
 class OCTDataset2Trans(Dataset): # Used in pre_compute_embedding (no embedding), train_self_v2 (with embedding), local_consistency (no embedding)
-    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, transform1=None, transform2=None, embedding=None, show=False, preload_data=False):
+    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, transform1=None, transform2=None, embedding=None, show=False, preload_data=False, pre_shuffle=False):
         """
         Dataset object used to pass images to a siamese network
         :param root: dataset root path
@@ -142,6 +157,7 @@ class OCTDataset2Trans(Dataset): # Used in pre_compute_embedding (no embedding),
         self.label_dict = labels_dict
         self.map_df = pd.read_csv(self.map_df)
         self.preload_data = preload_data
+        self.pre_shuffle = pre_shuffle
         self.data = None
         self.labels = None
 
@@ -162,10 +178,16 @@ class OCTDataset2Trans(Dataset): # Used in pre_compute_embedding (no embedding),
             print(f"{extra_labels} found in mapping dataset but not in label dict")
             print(f"Removing labels...")
             self.map_df = self.map_df.dropna(axis=0)
+        # Remove incomplete images
+        self.map_df = self.map_df[(self.map_df["idx_end"] - self.map_df['idx_start']) == ascan_per_group].copy()
+        self.map_df = self.map_df.sample(frac=0.25)
 
         if self.preload_data:
             self.data = [cv2.imread(self.root.joinpath(self.map_df['img_relative_path'].iloc[i])) for i in range(len(self.map_df))]
             self.labels = [self.map_df['label'].iloc[i] for i in range(len(self.map_df))]
+
+        if self.pre_shuffle:
+            self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
 
         if embedding is not None:
             self.embedding = np.load(embedding)
@@ -254,7 +276,7 @@ class OCTDatasetSSL(Dataset): # train_semi (ssl)
     def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict,
                  reliable_label_idxs: Union[np.array, None], return_just_reliable: bool,
                  use_strong_transform: bool, strong_transforms=None,
-                 one_hot=False):
+                 one_hot=False, pre_shuffle=False):
         """
         Dataset object used to pass images to a siamese network
         :param root: dataset root path
@@ -278,6 +300,7 @@ class OCTDatasetSSL(Dataset): # train_semi (ssl)
         self.use_strong_transform = use_strong_transform
         self.strong_transform = strong_transforms
         self.one_hot = one_hot
+        self.pre_shuffle = pre_shuffle
         self.transforms = None
 
         # Update relative path to image paths
@@ -303,6 +326,9 @@ class OCTDatasetSSL(Dataset): # train_semi (ssl)
             print(f"{extra_labels} found in mapping dataset but not in label dict")
             print(f"Removing labels...")
             self.map_df = self.map_df.dropna(axis=0)
+
+        if self.pre_shuffle:
+            self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
 
         # Setup transforms
         # mean, std = self.get_mean_std()

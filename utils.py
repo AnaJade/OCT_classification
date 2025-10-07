@@ -2,6 +2,7 @@ import pathlib
 import yaml
 import numpy as np
 import pandas as pd
+import wandb
 
 from scipy.spatial.transform import Rotation
 
@@ -39,6 +40,26 @@ def load_log_file(txt_path: pathlib.Path) -> pd.DataFrame:
     txt = pd.read_table(txt_path, sep=',', header=None, names=col_names)
     return txt
 
+
+def wandb_init(project_name: str, hyperparams:dict):
+    wandb.init(
+        # Choose wandb project
+        project=project_name,
+        # Add hyperparameter tracking
+        config=hyperparams
+    )
+
+
+def wandb_log(phase: str, **kwargs):
+    """
+    Log the given parameters
+    :param phase: Either batch or epoch
+    :param kwargs: Values to be logged
+    :return:
+    """
+    # Append phase at the end of the param names
+    log_data = {f'{key}_{phase}': value for key, value in kwargs.items()}
+    wandb.log(log_data)
 
 
 if __name__ == '__main__':

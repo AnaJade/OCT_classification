@@ -304,7 +304,8 @@ if __name__ == '__main__':
     use_mini_dataset = configs['data']['use_mini_dataset']
 
     # Dataset target path (if different then dataset_root)
-    target_path = pathlib.Path(r"C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data")
+    # target_path = pathlib.Path(r"C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data")
+    target_path = pathlib.Path(r"/data/Boudreault/OCT_lab_data")
     img_root_path = target_path.joinpath(f"{ascan_per_group}mscans")
 
     # Save images as individual .jpg chunks
