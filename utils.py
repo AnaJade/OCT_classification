@@ -1,9 +1,13 @@
 import pathlib
+
+import torch
 import yaml
 import numpy as np
 import pandas as pd
+import wandb
 
 from scipy.spatial.transform import Rotation
+from torch import nn
 
 
 def load_configs(config_path: pathlib.Path) -> dict:
@@ -39,6 +43,53 @@ def load_log_file(txt_path: pathlib.Path) -> pd.DataFrame:
     txt = pd.read_table(txt_path, sep=',', header=None, names=col_names)
     return txt
 
+
+def wandb_init(project_name: str, hyperparams:dict):
+    wandb.init(
+        # Choose wandb project
+        project=project_name,
+        # Add hyperparameter tracking
+        config=hyperparams
+    )
+
+
+def wandb_log(phase: str, **kwargs):
+    """
+    Log the given parameters
+    :param phase: Either batch or epoch
+    :param kwargs: Values to be logged
+    :return:
+    """
+    # Append phase at the end of the param names
+    log_data = {f'{key}_{phase}': value for key, value in kwargs.items()}
+    wandb.log(log_data)
+
+
+def update_backbone_channel(feature_model, ch_in: int):
+    """
+    Update first layer input to accept either greyscale or rgb images
+    :param feature_model: model to be updated
+    :param arch: model name
+    :param ch_in: desired input channel size
+    :return: updated model
+    """
+    arch = feature_model.__class__.__name__
+    if 'ResNet' in arch:
+        layer = feature_model.conv1
+    elif 'VisionTransformer' == arch:
+        layer = feature_model.conv_proj
+    elif ('EfficientNet' in arch) or ('SwinTransformer' in arch) or ('ConvNeXt' in arch):
+        layer = feature_model.features[0][0]
+    elif 'PyramidVisionTransformer' in arch:
+        layer = feature_model.patch_embed.proj
+
+    layer.in_channels = ch_in
+    if ch_in == 1:
+        layer.weight = nn.Parameter(torch.mean(layer.weight, dim=1, keepdim=True))
+    elif ch_in == 3:
+        layer.weight = nn.Parameter(torch.concat(3*[layer.weight], dim=1))
+
+    return feature_model
 
 
 if __name__ == '__main__':

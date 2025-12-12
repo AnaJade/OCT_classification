@@ -1,6 +1,6 @@
 data:
   dataset_root_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
-  dataset_root_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
+  dataset_root_linux: /data/Boudreault/OCT_lab_data_raw
   ds_split: [0.6, 0.15, 0.25]
   labels:
     - chicken_heart
@@ -9,13 +9,19 @@ data:
     - lamb_testicle
     # - lamb_liver
   ascan_per_group: 5000
+  pre_processing:
+    no_noise: False
+    use_movmean: False
+    use_speckle: False
+    ascan_sampling: 1 # Set to 1 for no sampling
   use_mini_dataset: True  # Use only files with speed 8 to limit data storage size
+  img_mean: 43.51
+  img_std: 24.98
 training:
   random_seed: 2625233
-  model: 'SPICE' # 'resnet18' 'efficientnet-b0'
 SPICE:
   MoCo:
-    dataset_name: oct # 'oct'  # [stl10, cifar10, cifar100]
+    dataset_name: stl10 # 'oct'  # [stl10, cifar10, cifar100]
     dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
     dataset_path_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
     use_all: False   # True: Use train + test, False: Use only train
@@ -55,7 +61,7 @@ SPICE:
       train: False
       show: False
     model_sim:
-      num_classes: 10 # 128
+      num_classes: 512 # 128
       in_channels: 3
       batchnorm_track: True
       test: False
@@ -67,14 +73,14 @@ SPICE:
     resume: False # Start again from ckp
     num_head: 10
     num_train: 5 # Not used??
-    batch_size: 5000
+    batch_size: 128 # 5000
     target_sub_batch_size: 100
-    train_sub_batch_size: 128
-    batch_size_test: 100
+    train_sub_batch_size: 64 # Must be smaller than the batch size
+    batch_size_test: 64 # Must be smaller than the batch size
     num_trans_aug: 1 # Not used??
     num_repeat: 8
     fea_dim: 512
-    att_size: 7
+    att_size: 7 # Not used??
     center_ratio: 0.5
     sim_center_ratio: 0.9
     epochs: 100
@@ -117,24 +123,47 @@ SPICE:
     unlabeled: 0 # 1
     train_sampler: RandomSampler
 SimCLR:
-  dataset_name: stl10 # 'oct'  # [stl10, cifar10, cifar100]
+  dataset_name: oct  # [stl10, cifar10, cifar100]
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
   dataset_path_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
-  arch: resnet18 # --arch
-  num_workers: 1
+  img_channel: 1
+  sample_within_image: 480 # Set to -1 for no sampling
+  img_reshape: 256
+  use_iipp: True
+  num_same_area: 2 # Minimum number of images from the same area that will be used within a batch with iipp
+  use_simclr_augmentations: False # If true, use the SimCLR paper transforms. Else, use OCT recommended transforms
+  dataset_sample: 0.1  # Sample of the entire dataset
+  arch: swinv2t # resnet18, resnet50, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
+  use_pretrained: True
+  num_workers: 0
   max_epochs: 100
-  batch_size: 128 # 256
+  batch_size: 16 # 256 # Must be a multiple of num_same_area if iipp is used
   lr: 0.0003
   weight_decay: 0.0001
   disable_cuda: False
   fp16_precision: False
-  log_every_n_steps: 100
-  temperature: 0.07
+  log_every_n_steps: 2000 # Print update every x batch
+  temperature: 0.07 # 0.07 in paper, but 0.5 is often used in code samples
   gpu_index: 0
-
-
-
-
+  patience: 10
+BYOL:
+  dataset_name: oct  # [stl10, cifar10, cifar100]
+  dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  dataset_path_linux: /data/Boudreault
+  img_channel: 1
+  sample_within_image: 480
+  img_reshape: 256
+  use_iipp: True
+  dataset_sample: 0.1 # 0.25  # Sample of the entire dataset
+  arch: pvtv2b0 # resnet18, resnet50, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
+  use_pretrained: True
+  num_workers: 0
+  max_epochs: 100
+  batch_size: 16 # 256
+  lr: 0.0003
+  disable_cuda: False
+  gpu_index: 0
+  patience: 10
 
 
 wandb:

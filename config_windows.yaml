@@ -1,6 +1,6 @@
 data:
   dataset_root_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
-  dataset_root_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
+  dataset_root_linux: /data/Boudreault/OCT_lab_data_raw
   ds_split: [0.6, 0.15, 0.25]
   labels:
     - chicken_heart
@@ -13,25 +13,11 @@ data:
 training:
   random_seed: 2625233
   model: 'SPICE' # 'resnet18' 'efficientnet-b0'
-  weights_file_addon: 'mask_circ_0_1' # 'grayscale_no_oof' # 'no_bgnd' # "best_resnet18"  # Weights saved in f"{subnet_name}_{cam_str}cams_{nb_hidden}_{weights_file_addon}"
-  use_pretrained: True
-  pre_trained_weights: ""
-  num_fc_hidden_units: 256
-  train_bs: 2
-  valid_bs: 1
-  test_bs: 2
-  max_epochs: 1
-  patience: 2
-  lr: 0.005
-  lr_scheduler:
-    step_size: 3
-    gamma: 0.1
 SPICE:
   MoCo:
-    dataset_name: 'oct'  # [stl10, cifar10, cifar100] # TODO: Add option for OCT data
+    dataset_name: oct # 'oct'  # [stl10, cifar10, cifar100]
     dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
     dataset_path_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
-    # img_size: 96 # Set automatically, Image size of the corresponding dataset
     use_all: False   # True: Use train + test, False: Use only train
     base_model: 'resnet18' # 'clusterresnet'
     save_folder: ./results # Relative path from SPICE/tools or absolute path
@@ -39,7 +25,7 @@ SPICE:
     num_workers: 4
     max_epochs: 1000
     start_epoch: 0  # Useful to restart training
-    batch_size: 8 # 128
+    batch_size: 2 # 128
     lr: 0.015
     lr_schedule: [120, 160]  # when to drop lr by 10x
     momentum: 0.9
@@ -52,8 +38,7 @@ SPICE:
     dist_backend: 'gloo' # 'nccl'
     gpu_id: 0
     multiprocessing_distributed: True
-    # moco_dim: 10  # Set automatically, Number of classes in the selected dataset
-    moco_queue_size: 65536 # default: 65535
+    moco_queue_size: 1024 # 65536 # default: 65535
     moco_momentum: 0.999  # default: 0.999
     moco_softmax_temp: 0.07  # default: 0.07
     moco2_mlp: False
@@ -131,9 +116,21 @@ SPICE:
     all: 0 # 1
     unlabeled: 0 # 1
     train_sampler: RandomSampler
-
-
-
+SimCLR:
+  dataset_name: stl10 # 'oct'  # [stl10, cifar10, cifar100]
+  dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  dataset_path_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  arch: resnet18 # --arch
+  num_workers: 1
+  max_epochs: 100
+  batch_size: 128 # 256
+  lr: 0.0003
+  weight_decay: 0.0001
+  disable_cuda: False
+  fp16_precision: False
+  log_every_n_steps: 100
+  temperature: 0.07
+  gpu_index: 0
 
 wandb:
   wandb_log: False

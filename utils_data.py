@@ -3,6 +3,7 @@ import pathlib
 import warnings
 import platform
 from random import randint
+import re
 import h5py
 
 import cv2
@@ -15,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import cv2
+from scipy import signal
 from scipy.io import loadmat
 from PIL import Image
 from sklearn.metrics import mean_squared_error
@@ -34,29 +36,40 @@ from SPICE.fixmatch.datasets.data_utils import get_onehot
 
 
 class OCTDataset(Dataset): # Used in train_moco
-    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, transforms=None, preload_data=False):
+    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, ch_in=3, sample_within_image=-1, use_iipp=False, num_same_area=-1, transforms=None, preload_data=False, pre_shuffle=True, pre_sample=1):
         """
         Dataset object used to pass images to a siamese network
         :param root: dataset root path
         :param split: dataset split ('train', 'valid', 'test')
         :param map_df_paths: Path to the mapping dataframes of start and stop idx of M-Scans (train, valid, test)
         :param labels_dict: int to string label conversion
+        :param ch_in: Number of input channels (1: grayscale, 3: rgb)
+        :param sample_within_image: a-scan sequence length to be sampled from within the m-scan, set to -1 for no sampling
+        :param use_iipp: Whether to prepare the mapping df for intra-image positive pairs (adding meta-data)
+        :param num_same_area: number of images that will also be sampled within the same area (only for SimCLR, pairs have to be pre-assigned for BYOL)
         :param transforms: Set of transforms that will be applied to each image before being used as input by the model
         :param preload_data: Whether to preload and save all the data into class variables
+        :param pre_shuffle: Whether to shuffle the images once at the beginning
+        :param pre_sample: Ratio of images to be kept
         """
         self.root = root
-        # self.map_df_paths = map_df_paths
         self.transforms = transforms
         self.map_df = map_df_paths[split]
+        self.map_df_sampling = None
         self.label_dict = labels_dict
+        self.ch_in = ch_in
+        self.sample_within_image = sample_within_image
+        self.use_iipp = use_iipp
+        self.num_same_area = num_same_area
         self.map_df = pd.read_csv(self.map_df)
-        self.preload_data = preload_data
-        self.data = None
-        self.labels = None
+        self.pre_shuffle = pre_shuffle
+        self.pre_sample = pre_sample
+        self.map_df_sampling = None # used for iipp when num_same_area >= 2
+        self.show = False # For debug purposes
 
         # Update relative path to image paths
         ascan_per_group = self.map_df['idx_end'].iloc[0]
-        img_subdir = pathlib.Path(f"{ascan_per_group}mscans")
+        # img_subdir = pathlib.Path(f"{ascan_per_group}mscans")
         self.map_df.loc[:, 'img_relative_path'] = [pathlib.Path(p) for p in self.map_df.loc[:,'img_relative_path']]
 
         # Restructure mapping df
@@ -72,56 +85,153 @@ class OCTDataset(Dataset): # Used in train_moco
             print(f"Removing labels...")
             self.map_df = self.map_df.dropna(axis=0)
 
-        if self.preload_data:
-            self.data = [cv2.imread(self.root.joinpath(self.map_df['img_relative_path'].iloc[i])) for i in range(len(self.map_df))]
-            self.labels = [self.map_df['label'].iloc[i] for i in range(len(self.map_df))]
+        self.map_df['area'] = [re.sub('|'.join(f'{f}_' for f in self.label_dict.values()), '', p.parts[1]) for p in self.map_df['img_relative_path']]
+        self.map_df['trajectory'] = ['_'.join(p.stem.split('_')[:-2]) for p in self.map_df['img_relative_path']]
+        self.map_df['area_id'] = self.map_df.groupby(['label', 'area']).ngroup()
+
+        # Remove images that don't have ascan_per_group ascans in them
+        # Not needed with new method of generating images
+        # self.map_df = self.map_df.loc[self.map_df['idx_end'] - self.map_df['idx_start'] == ascan_per_group]
+
+        if (self.sample_within_image > 1) and (self.sample_within_image < ascan_per_group):
+            self.map_df.loc[:, 'img_idx_start'] = self.map_df.loc[:, 'idx_start']
+            self.map_df.loc[:, 'img_idx_end'] = self.map_df.loc[:, 'idx_end']
+            new_img_count = round(ascan_per_group / self.sample_within_image) # Get new count of images, faire comme si les images étaient générées avec le new ascan count
+            self.map_df = pd.concat([self.map_df]*new_img_count, axis=0).sort_index().reset_index(drop=True)
+            self.map_df = self.map_df.loc[self.map_df['idx_start'] <= self.map_df['idx_end'] - ascan_per_group, :] # Comment after debug
+            self.map_df.loc[:, 'img_idx_start'] = [randint(0, ascan_per_group-self.sample_within_image) for _ in self.map_df.index.tolist()]
+            self.map_df.loc[:, 'img_idx_end'] = self.map_df.loc[:, 'img_idx_start'] + self.sample_within_image
+        else:
+            print(f'Cannot sample {self.sample_within_image} A-scans from within {ascan_per_group} A-scan images')
+
+        if self.pre_sample < 1:
+            self.map_df.loc[:, 'area'] = [s.parts[1] for s in self.map_df.loc[:, 'img_relative_path']]
+            self.map_df.loc[:, 'traj'] = ['_'.join(s.stem.split('_')[:-2]) for s in
+                                          self.map_df.loc[:, 'img_relative_path']]
+            self.map_df = self.map_df.groupby(['label_str', 'area', 'traj']).sample(frac=self.pre_sample)
+            self.map_df = self.map_df.drop(columns=['area', 'traj'])
+            self.map_df = self.map_df.reset_index(drop=True)
+
+        if self.use_iipp and self.num_same_area < 1:
+            # Make the number of imgs per area even
+            self.map_df['pair_id'] = self.map_df.groupby('area_id').cumcount()
+            rm_rows_idx = self.map_df.reset_index().groupby('area_id').last()
+            rm_rows_idx = rm_rows_idx[rm_rows_idx['pair_id'] % 2 == 0]['index'].tolist()
+            self.map_df = self.map_df.loc[~self.map_df.index.isin(rm_rows_idx)].copy()
+            self.create_iipp_map_df()
+        elif self.use_iipp and self.num_same_area >=2:
+            # Sample 1/num_same_area of map_df
+            map_df = self.map_df.groupby('area_id').sample(frac=1/self.num_same_area).sort_index()
+            self.map_df_sampling = self.map_df[~self.map_df.index.isin(map_df.index)].reset_index(drop=True).copy()
+            self.map_df = map_df.reset_index(drop=True).copy()
+            # Add weights to sampling df
+            self.map_df_sampling['weights'] = 1.0
+
+        if self.pre_shuffle:
+            self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
 
     def __len__(self):
-        return len(self.map_df)
+        if self.use_iipp and self.num_same_area < 1:
+            return len(self.map_df['pair_id'].unique())
+        else:
+            return len(self.map_df)
 
     def __getitem__(self, idx):
-        if self.preload_data:
-            data = self.data[idx]
-            label = self.labels[idx]
-        else:
-            # scan_info = self.map_df[idx]
-            scan_path = self.root.joinpath(self.map_df['img_relative_path'].iloc[idx])
-            scan_idx_start = self.map_df['idx_start'].iloc[idx]
-            scan_idx_end = self.map_df['idx_end'].iloc[idx]
-            label = int(self.map_df['label'].iloc[idx])
+        if self.sample_within_image > 1:
+            img_idx_start = [self.map_df['img_idx_start'].iloc[idx]]
+            img_idx_end = [self.map_df['img_idx_end'].iloc[idx]]
+        if self.use_iipp:
+            if self.num_same_area < 1:
+                scan_paths = [self.root.joinpath(img_rel_path) for img_rel_path in
+                              self.map_df.loc[self.map_df['pair_id'] == idx, 'img_relative_path'].tolist()]
+                label = int(self.map_df.loc[self.map_df['pair_id'] == idx, 'label'].unique())
+            else:
+                scan_path = [self.root.joinpath(self.map_df['img_relative_path'].iloc[idx])]
+                area = self.map_df['area_id'].iloc[idx]
+                extra_idx = self.map_df_sampling[self.map_df_sampling['area_id'] == area].sample(n=self.num_same_area-1, weights='weights').index.tolist()
+                scan_path_extra = [self.root.joinpath(self.map_df_sampling.iloc[i]['img_relative_path']) for i in extra_idx]
+                scan_paths = scan_path + scan_path_extra
+                # Update weights
+                self.map_df_sampling.loc[self.map_df_sampling.index.isin(extra_idx), 'weights'] = self.map_df_sampling.loc[self.map_df_sampling.index.isin(extra_idx), 'weights'] - 0.25
+                self.map_df_sampling.loc[self.map_df_sampling['weights'] < 0, 'weights'] = 0 # Set weight to 0 if it becomes negative
+                label = int(self.map_df['label'].iloc[idx])
+                # Get associated start and end idx within image
+                if self.sample_within_image > 1:
+                    img_idx_start = img_idx_start + self.map_df.loc[self.map_df.index.isin(extra_idx), 'img_idx_start'].tolist()
+                    img_idx_end = img_idx_end + self.map_df.loc[self.map_df.index.isin(extra_idx), 'img_idx_end'].tolist()
 
             # Read M-Scan
-            # data = np.load(scan_path)
-            # data = np.expand_dims(data[scan_idx_start:scan_idx_end, :].T, 0)
-            # data = np.expand_dims(data[0:10000, :].T, 0)
-            # data.shape = (512, 5000, 3)
-            data = cv2.imread(scan_path)# , cv2.IMREAD_GRAYSCALE)
+            data = [cv2.imread(scan_path) for scan_path in scan_paths]  # shape: (512, 512, 3)
+            # Crop image to designed idx start and end
+            if self.sample_within_image > 1:
+                for i, (idx0, idx1) in enumerate(zip(img_idx_start, img_idx_end)):
+                    data[i] = data[i][:, idx0:idx1, :]
+            data = [Image.fromarray(d) for d in data]
 
-            # doing this so that it is consistent with all other datasets
-            # to return a PIL Image
+            if self.show:
+                data_og = data.copy()
+
+            # Apply transforms
+            if self.transforms is not None:
+                data = [self.transforms(d) for d in data]
+
+            # Concat along channel dimension
+            if self.num_same_area < 1:
+                # For BYOL
+                data = torch.cat(data, 0)
+            else:
+                # For SimCLR
+                data = [[data[i][j] for i in range(len(data))] for j in range(len(data[0]))] # Reshape to get a sub-list for each transform
+                data = [torch.cat(data[i], dim=0) for i in range(len(data))] # Concat all images per transform
+
+            if self.show:
+                data_tr = [data[i,:,:] for i in range(data.shape[0])]
+                fig, axs = plt.subplots(2,2)
+                for i, ax in enumerate(axs.flatten()):
+                    if i < 2:
+                        ax.imshow(data_og[i])
+                        ax.title.set_text(f'OG img {i}')
+                    else:
+                        ax.imshow(data_tr[i-2])
+                        ax.title.set_text(f'tr img {i-2}')
+                fig.show()
+                print()
+
+        else:
+            scan_path = self.root.joinpath(self.map_df['img_relative_path'].iloc[idx])
+            label = int(self.map_df['label'].iloc[idx])
+
+            data = cv2.imread(scan_path)  # shape: (512, 512, 3)
+            # Crop image to designed idx start and end
+            if self.sample_within_image > 1:
+                data = data[:, img_idx_start:img_idx_end, :]
             data = Image.fromarray(data)
-            """
-            try:
-                data = Image.fromarray(data) # , mode='L')
-            except AttributeError:
-                print(f"Problem with file {scan_path}")
-                # TODO: REMOVE AFTER DEBUG
-                idx = idx + 1
-                scan_path = self.root.joinpath(self.map_df['img_relative_path'].iloc[idx])
-                label = int(self.map_df['label'].iloc[idx])
-                data = cv2.imread(scan_path)
-                data = Image.fromarray(data)
-            """
 
-        # Apply transforms
-        if self.transforms is not None:
-            data = self.transforms(data)
+            # Apply transforms
+            if self.transforms is not None:
+                data = self.transforms(data)
 
-        return data, label
+        # Add metadata if iipp is used
+        if self.use_iipp:
+            metadata = self.map_df['area_id'].iloc[idx]
+            return [data, metadata], label
+        else:
+            return data, label
+
+    def create_iipp_map_df(self):
+        # Set random pair ids
+        map_df1 = self.map_df.groupby('area_id').sample(frac=0.5).copy()
+        map_df1['pair_id'] = np.arange(len(map_df1))
+        map_df2 = self.map_df.loc[~self.map_df.index.isin(map_df1.index)].sort_values('area_id').copy()
+        map_df2['pair_id'] = np.arange(len(map_df2))
+        self.map_df = pd.concat([map_df1, map_df2], axis=0).sort_index()
+
+    def reset_sampling_weights(self):
+        self.map_df_sampling.loc[:, 'weights'] = 1
 
 
 class OCTDataset2Trans(Dataset): # Used in pre_compute_embedding (no embedding), train_self_v2 (with embedding), local_consistency (no embedding)
-    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, transform1=None, transform2=None, embedding=None, show=False, preload_data=False):
+    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, transform1=None, transform2=None, embedding=None, show=False, preload_data=False, pre_shuffle=True, pre_sample=1):
         """
         Dataset object used to pass images to a siamese network
         :param root: dataset root path
@@ -131,6 +241,9 @@ class OCTDataset2Trans(Dataset): # Used in pre_compute_embedding (no embedding),
         :param transform2: Second set of transforms that will be applied to each image before being used as input by the model
         :param embedding: npy embedding file
         :param show: Whether to show the resulting transformed images or not
+        :param preload_data: Whether to preload data into memory at the beginning
+        :param pre_shuffle: Whether to shuffle the images once at the beginning
+        :param pre_sample: Ratio of images to be kept
         """
         self.root = root
         # self.map_df_paths = map_df_paths
@@ -142,6 +255,8 @@ class OCTDataset2Trans(Dataset): # Used in pre_compute_embedding (no embedding),
         self.label_dict = labels_dict
         self.map_df = pd.read_csv(self.map_df)
         self.preload_data = preload_data
+        self.pre_shuffle = pre_shuffle
+        self.pre_sample = pre_sample
         self.data = None
         self.labels = None
 
@@ -166,6 +281,11 @@ class OCTDataset2Trans(Dataset): # Used in pre_compute_embedding (no embedding),
         if self.preload_data:
             self.data = [cv2.imread(self.root.joinpath(self.map_df['img_relative_path'].iloc[i])) for i in range(len(self.map_df))]
             self.labels = [self.map_df['label'].iloc[i] for i in range(len(self.map_df))]
+
+        if self.pre_shuffle:
+            self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
+        if self.pre_sample < 1:
+            self.map_df = self.map_df.sample(frac=self.pre_sample)
 
         if embedding is not None:
             self.embedding = np.load(embedding)
@@ -254,7 +374,7 @@ class OCTDatasetSSL(Dataset): # train_semi (ssl)
     def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict,
                  reliable_label_idxs: Union[np.array, None], return_just_reliable: bool,
                  use_strong_transform: bool, strong_transforms=None,
-                 one_hot=False):
+                 one_hot=False, pre_shuffle=True):
         """
         Dataset object used to pass images to a siamese network
         :param root: dataset root path
@@ -266,6 +386,7 @@ class OCTDatasetSSL(Dataset): # train_semi (ssl)
         :param use_strong_transform: Whether to also apply the strong transforms
         :param strong_transforms: List of transformations included in the strong transforms
         :param one_hot: Whether to apply a one-hot transformation to the target labels
+        :param pre_shuffle: Whether to shuffle the images once at the beginning
         """
         self.root = root
         self.split = split
@@ -278,6 +399,7 @@ class OCTDatasetSSL(Dataset): # train_semi (ssl)
         self.use_strong_transform = use_strong_transform
         self.strong_transform = strong_transforms
         self.one_hot = one_hot
+        self.pre_shuffle = pre_shuffle
         self.transforms = None
 
         # Update relative path to image paths
@@ -303,6 +425,9 @@ class OCTDatasetSSL(Dataset): # train_semi (ssl)
             print(f"{extra_labels} found in mapping dataset but not in label dict")
             print(f"Removing labels...")
             self.map_df = self.map_df.dropna(axis=0)
+
+        if self.pre_shuffle:
+            self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
 
         # Setup transforms
         # mean, std = self.get_mean_std()
@@ -415,6 +540,34 @@ def find_keywords(df: pd.DataFrame, col: str, keywords: list) -> pd.DataFrame:
     df['keyword_count'] = np.sum(df[[w for w in keywords]], axis=1)
 
     return df
+
+
+def build_image_root(ascan_per_group: int, pre_processing: dict) -> str:
+    """
+    Build image root folder name based on the Matlab script
+    :param ascan_per_group: number of ascans per image
+    :param pre_processing: dict with info on the selected pre-processing options
+    :return:
+    """
+    p = f"{ascan_per_group}mscans"
+    if pre_processing['no_noise']:
+        p = f"{p}_noNoise"
+    if pre_processing['use_movmean']:
+        p = f"{p}_movmean"
+    if pre_processing['use_speckle']:
+        p = f"{p}_speckle"
+    if pre_processing['ascan_sampling'] > 1:
+        p = f"{p}_sample{pre_processing['ascan_sampling']}"
+    return p
+
+
+def movmean(a:np.ndarray, w:int) -> np.ndarray:
+    # a_pre = np.expand_dims(np.mean(a[:, :2], axis=1), axis=-1)
+    # a_post = np.expand_dims(np.mean(a[:, -2:], axis=1), axis=-1)
+    # a_exp = np.concat([a_pre, a, a_post], axis=1)
+    # a = signal.convolve2d(a_exp, np.ones((1, w)), 'valid') / w
+    a = signal.fftconvolve(a, np.ones((1, w)), mode='same')/w
+    return a
 
 
 class NormTransform(torch.nn.Module):
