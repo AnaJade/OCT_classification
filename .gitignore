@@ -8,6 +8,7 @@ data_prep/df_split_dbg.xlsx
 SPICE/tools/results/*
 SimCLR/weights*
 BYOL/weights*
+BYOL/*.pth
 BYOL/__pycache__
 nvidia-bug-report.log.gz
 nvidia-debugdump-temp2119908.log
