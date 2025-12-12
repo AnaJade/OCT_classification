@@ -22,6 +22,7 @@ Also install the following packages:
   * Modify protobuf version as needed: `pip install protobuf==3.20.3 --upgrade` ([Source](https://stackoverflow.com/a/75844470))
 * BYOL model: `pip install byol-pytorch`
 * nvidia-ml-py (gpu debugging): `pip install nvidia-ml-py`
+
 To log into wandb, run `wandb login [api key]`
 
 ## Config file parameters

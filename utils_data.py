@@ -130,6 +130,15 @@ class OCTDataset(Dataset): # Used in train_moco
         if self.pre_shuffle:
             self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
 
+        if self.pre_sample < 1:
+            self.map_df.loc[:, 'area'] = [s.parts[1] for s in self.map_df.loc[:, 'img_relative_path']]
+            self.map_df.loc[:, 'traj'] = ['_'.join(s.stem.split('_')[:-2]) for s in self.map_df.loc[:, 'img_relative_path']]
+            self.map_df = self.map_df.groupby(['label_str', 'area', 'traj']).sample(frac=self.pre_sample)
+            self.map_df = self.map_df.drop(columns=['area', 'traj'])
+
+        if self.pre_shuffle:
+            self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
+
     def __len__(self):
         if self.use_iipp and self.num_same_area < 1:
             return len(self.map_df['pair_id'].unique())
@@ -200,7 +209,6 @@ class OCTDataset(Dataset): # Used in train_moco
         else:
             scan_path = self.root.joinpath(self.map_df['img_relative_path'].iloc[idx])
             label = int(self.map_df['label'].iloc[idx])
-
             data = cv2.imread(scan_path)  # shape: (512, 512, 3)
             # Crop image to designed idx start and end
             if self.sample_within_image > 1:
@@ -257,8 +265,6 @@ class OCTDataset2Trans(Dataset): # Used in pre_compute_embedding (no embedding),
         self.preload_data = preload_data
         self.pre_shuffle = pre_shuffle
         self.pre_sample = pre_sample
-        self.data = None
-        self.labels = None
 
         # Update relative path to image paths
         ascan_per_group = self.map_df['idx_end'].iloc[0]
@@ -277,6 +283,9 @@ class OCTDataset2Trans(Dataset): # Used in pre_compute_embedding (no embedding),
             print(f"{extra_labels} found in mapping dataset but not in label dict")
             print(f"Removing labels...")
             self.map_df = self.map_df.dropna(axis=0)
+        # Remove incomplete images
+        self.map_df = self.map_df[(self.map_df["idx_end"] - self.map_df['idx_start']) == ascan_per_group].copy()
+        self.map_df = self.map_df.sample(frac=0.25)
 
         if self.preload_data:
             self.data = [cv2.imread(self.root.joinpath(self.map_df['img_relative_path'].iloc[i])) for i in range(len(self.map_df))]

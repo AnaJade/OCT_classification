@@ -1,6 +1,6 @@
 data:
   dataset_root_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
-  dataset_root_linux: /data/Boudreault/OCT_lab_data_raw
+  dataset_root_linux: /data/Boudreault/OCT_lab_data # _raw
   ds_split: [0.6, 0.15, 0.25]
   labels:
     - chicken_heart
@@ -21,17 +21,17 @@ training:
   random_seed: 2625233
 SPICE:
   MoCo:
-    dataset_name: stl10 # 'oct'  # [stl10, cifar10, cifar100]
+    dataset_name: 'oct'  # [stl10, cifar10, cifar100]
     dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
-    dataset_path_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+    dataset_path_linux: /data/Boudreault
     use_all: False   # True: Use train + test, False: Use only train
     base_model: 'resnet18' # 'clusterresnet'
     save_folder: ./results # Relative path from SPICE/tools or absolute path
-    save_freq: 1 # How often the model will be saved
-    num_workers: 4
-    max_epochs: 1000
+    save_freq: 10 # How often the model will be saved
+    num_workers: 0 # 8
+    max_epochs: 200
     start_epoch: 0  # Useful to restart training
-    batch_size: 2 # 128
+    batch_size: 32
     lr: 0.015
     lr_schedule: [120, 160]  # when to drop lr by 10x
     momentum: 0.9
@@ -40,11 +40,11 @@ SPICE:
     resume: False
     world_size: 1 # number of nodes for distributed training
     rank: 0 # node rank for distributed training
-    dist_url: 'env://?use_libuv=False' # 'tcp://localhost:10001' # url used to set up distributed training
-    dist_backend: 'gloo' # 'nccl'
-    gpu_id: 0
+    dist_url: 'env://' # 'env://?use_libuv=False' # 'tcp://localhost:10001' # url used to set up distributed training
+    dist_backend: 'nccl' # 'gloo'
+    gpu_id: 0 # 0
     multiprocessing_distributed: True
-    moco_queue_size: 1024 # 65536 # default: 65535
+    moco_queue_size: 65536 # 65536 # default: 65535
     moco_momentum: 0.999  # default: 0.999
     moco_softmax_temp: 0.07  # default: 0.07
     moco2_mlp: False
@@ -52,11 +52,11 @@ SPICE:
     moco2_cos: False
   embedding:
     model_name: embedding
-    weight: checkpoint_0016.pth.tar   # File path: [MoCo save_folder]/[MoCo dataset_name]/[embedding weight]
-    batch_size: 1000
+    weight: checkpoint_last.pth.tar   # File path: [MoCo save_folder]/[MoCo dataset_name]/[embedding weight]
+    batch_size: 32 # 1000
     data_test:
       shuffle: False
-      imgs_per_batch: 50
+      imgs_per_batch: 16 # 50
       aspect_ratio_grouping: False
       train: False
       show: False
@@ -71,7 +71,7 @@ SPICE:
     all: 0 # 1
     model_name: spice_self
     resume: False # Start again from ckp
-    num_head: 10
+    num_head: 10 # Number of different versions of heads to be trained (best will be kept)
     num_train: 5 # Not used??
     batch_size: 128 # 5000
     target_sub_batch_size: 100
@@ -85,14 +85,14 @@ SPICE:
     sim_center_ratio: 0.9
     epochs: 100
     start_epoch: 0
-    print_freq: 1
+    print_freq: 2 # Can't be larger than batch_size//sub_batch_size
     test_freq: 1
     eval_ent: False
     eval_ent_weight: 0
   local_consistency:
     model_name: eval
-    batch_size: 100
-    batch_size_test: 1
+    batch_size: 32 # 100
+    batch_size_test: 32
   semi:
     model_name: 'spice_semi'
     resume: False
@@ -125,7 +125,7 @@ SPICE:
 SimCLR:
   dataset_name: oct  # [stl10, cifar10, cifar100]
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
-  dataset_path_linux: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  dataset_path_linux: /data/Boudreault
   img_channel: 1
   sample_within_image: 480 # Set to -1 for no sampling
   img_reshape: 256
@@ -136,7 +136,7 @@ SimCLR:
   arch: swinv2t # resnet18, resnet50, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
-  max_epochs: 100
+  max_epochs: 200
   batch_size: 16 # 256 # Must be a multiple of num_same_area if iipp is used
   lr: 0.0003
   weight_decay: 0.0001
@@ -164,8 +164,7 @@ BYOL:
   disable_cuda: False
   gpu_index: 0
   patience: 10
-
-
 wandb:
   wandb_log: False
   project_name: 'Test-project' # 'Test-project'  'Mandible-tracking'
+  
