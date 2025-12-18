@@ -30,7 +30,7 @@ SimCLR:
   num_same_area: 2 # Minimum number of images from the same area that will be used within a batch with iipp
   use_simclr_augmentations: False # If true, use the SimCLR paper transforms. Else, use OCT recommended transforms
   dataset_sample: 0.1  # Sample of the entire dataset
-  arch: swinv2t # resnet18, resnet50, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
+  arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
   max_epochs: 200
@@ -52,7 +52,7 @@ BYOL:
   img_reshape: 256
   use_iipp: True
   dataset_sample: 0.1 # 0.25  # Sample of the entire dataset
-  arch: pvtv2b0 # resnet18, resnet50, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
+  arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
   max_epochs: 100

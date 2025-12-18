@@ -26,6 +26,7 @@ import torch.nn as nn
 from sklearn.metrics import precision_score, recall_score, adjusted_rand_score, normalized_mutual_info_score
 
 from byol_pytorch import BYOL
+from feature_model import get_backbone
 
 # Import utils
 parent_dir = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -34,29 +35,23 @@ import utils
 from utils_data import OCTDataset
 
 # Img size and moco_dim (nb of classes) values based on the dataset
+# Img size and moco_dim (nb of classes) values based on the dataset
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
                  'cifar100': 32}
 num_cluster_dict = {'stl10': 10,
                     'cifar10': 10,
                     'cifar100': 100}
-
 mean, std = {}, {}
 mean['cifar10'] = [x / 255 for x in [125.3, 123.0, 113.9]]
 mean['cifar100'] = [x / 255 for x in [129.3, 124.1, 112.4]]
 mean['stl10'] = [0.485, 0.456, 0.406]
-mean['npy'] = [0.485, 0.456, 0.406]
-mean['npy224'] = [0.485, 0.456, 0.406]
-mean['oct'] = [x /255 for x in [42.573, 42.573, 42.573]]
-# mean['oct'] = [x /255 for x in [42.573]]
+# mean['oct'] = [43.51, 43.51, 43.51]
 
 std['cifar10'] = [x / 255 for x in [63.0, 62.1, 66.7]]
 std['cifar100'] = [x / 255 for x in [68.2,  65.4,  70.4]]
 std['stl10'] = [0.229, 0.224, 0.225]
-std['npy'] = [0.229, 0.224, 0.225]
-std['npy224'] = [0.229, 0.224, 0.225]
-std['oct'] = [x /255 for x in [26.688, 26.688, 26.688]]
-# std['oct'] = [x /255 for x in [26.688]]
+# std['oct'] = [24.98, 24.98, 24.98]
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
@@ -70,21 +65,16 @@ parser.add_argument('--config_path',
                     type=str)
 
 
-class ResNetFeatureExtractor(object):
+class FeatureExtractor(object):
     def __init__(self, args, ckp_file):
         self.ckp_file = ckp_file
         self.args = args
-        # self.model = ResNetSimCLR(base_model=args.arch, out_dim=args.out_dim)
 
         # Define model
-        if args.arch == 'resnet18':
-            self.model = models.resnet18(weights=None)
-        elif args.arch == 'resnet50':
-            self.model = models.resnet50(weights=None)
+        self.model, _ = get_backbone(args.arch, False)
         # Change first layer to take grayscale image
         if args.img_channel == 1:
-            self.model.conv1.in_channels = 1
-            self.model.conv1.weight = nn.Parameter(torch.mean(self.model.conv1.weight, dim=1, keepdim=True))
+            self.model = utils.update_backbone_channel(self.model, args.img_channel)
 
         # Load weights
         state_dict = torch.load(self.ckp_file, map_location=self.args.device)
@@ -109,7 +99,7 @@ class ResNetFeatureExtractor(object):
         print("Features shape {}".format(feature_vector.shape))
         return feature_vector, labels_vector
 
-    def get_resnet_features(self, train_loader, test_loader):
+    def get_features(self, train_loader, test_loader):
         X_train_feature, y_train = self._inference(train_loader)
         X_test_feature, y_test = self._inference(test_loader)
 
@@ -269,7 +259,8 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:Namespace, batch_size:int,
     train_dataset = OCTDataset(root_path, 'train',
                                args.map_df_paths, args.labels_dict,
                                ch_in=args.img_channel,
-                               use_iipp=False,
+                               sample_within_image=args.sample_within_image,
+                               use_iipp=False, # args.use_iipp,
                                num_same_area=-1,
                                transforms=img_transforms,
                                pre_sample=args.dataset_sample)
@@ -278,12 +269,13 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:Namespace, batch_size:int,
                               num_workers=0, drop_last=False, shuffle=shuffle)
 
     test_dataset = OCTDataset(root_path, 'test',
-                               args.map_df_paths, args.labels_dict,
-                               ch_in=args.img_channel,
-                               use_iipp=False,
-                               num_same_area=-1,
-                               transforms=img_transforms,
-                               pre_sample=args.dataset_sample)
+                              args.map_df_paths, args.labels_dict,
+                              ch_in=args.img_channel,
+                              sample_within_image=args.sample_within_image,
+                              use_iipp=False,
+                              num_same_area=-1,
+                              transforms=img_transforms,
+                              pre_sample=args.dataset_sample)
 
     test_loader = DataLoader(test_dataset, batch_size=batch_size,
                              num_workers=0, drop_last=False, shuffle=shuffle)
@@ -325,6 +317,7 @@ def main():
     args.img_channel = configs['BYOL']['img_channel']
     if args.dataset_name != 'oct':
         args.img_channel = 3
+    args.sample_within_image = configs['BYOL']['sample_within_image']
     args.img_reshape = configs['BYOL']['img_reshape']
     if args.img_reshape is not None:
         args.img_size = args.img_reshape
@@ -375,8 +368,8 @@ def main():
 
     # Extract features
     print(f"Extracting features on the train and test sets...")
-    resnet_feature_extractor = ResNetFeatureExtractor(args, chkpt_file)
-    X_train_feature, y_train, X_test_feature, y_test = resnet_feature_extractor.get_resnet_features(train_loader, test_loader)
+    resnet_feature_extractor = FeatureExtractor(args, chkpt_file)
+    X_train_feature, y_train, X_test_feature, y_test = resnet_feature_extractor.get_features(train_loader, test_loader)
 
     # Train logistic regression
     print(f"Training the regression model...")

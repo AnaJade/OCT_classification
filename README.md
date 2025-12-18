@@ -16,9 +16,9 @@ Also install the following packages:
   * hf_xet: `pip install huggingface_hub[hf_xet]`
 * tqdm: `conda install tqdm`
 * wandb: `pip install wandb`
-* addict: `pip install addict` (for SPICE)
-* lmdb: `pip install lmdb` (for SPICE)
-* tensorboard: `pip install tensorboard` (for SPICE)
+* addict: `pip install addict`
+* lmdb: `pip install lmdb` (for SPICE - double check if still needed)
+* tensorboard: `pip install tensorboard` (for SPICE - double check if still needed)
   * Modify protobuf version as needed: `pip install protobuf==3.20.3 --upgrade` ([Source](https://stackoverflow.com/a/75844470))
 * BYOL model: `pip install byol-pytorch`
 * nvidia-ml-py (gpu debugging): `pip install nvidia-ml-py`
@@ -124,7 +124,7 @@ containing the following sub-folders and files:
 ```
 └── Dataset root/[ascan_per_group]mscans
     └── [scan name 0]
-        ├── [scan name 0]_[traj name 0]_[idx_start]_[idx_end].jpg
+        ├── [scan name 0]_[traj name 0]_[idx_start]_[idx_end].png
         └── ...
     └── [scan name 1]
         └── ...

@@ -128,15 +128,6 @@ class OCTDataset(Dataset): # Used in train_moco
         if self.pre_shuffle:
             self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
 
-        if self.pre_sample < 1:
-            self.map_df.loc[:, 'area'] = [s.parts[1] for s in self.map_df.loc[:, 'img_relative_path']]
-            self.map_df.loc[:, 'traj'] = ['_'.join(s.stem.split('_')[:-2]) for s in self.map_df.loc[:, 'img_relative_path']]
-            self.map_df = self.map_df.groupby(['label_str', 'area', 'traj']).sample(frac=self.pre_sample)
-            self.map_df = self.map_df.drop(columns=['area', 'traj'])
-
-        if self.pre_shuffle:
-            self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
-
     def __len__(self):
         if self.use_iipp and self.num_same_area < 1:
             return len(self.map_df['pair_id'].unique())
@@ -144,14 +135,14 @@ class OCTDataset(Dataset): # Used in train_moco
             return len(self.map_df)
 
     def __getitem__(self, idx):
-        if self.sample_within_image > 1:
-            img_idx_start = [self.map_df['img_idx_start'].iloc[idx]]
-            img_idx_end = [self.map_df['img_idx_end'].iloc[idx]]
         if self.use_iipp:
+            # For BYOL
             if self.num_same_area < 1:
                 scan_paths = [self.root.joinpath(img_rel_path) for img_rel_path in
                               self.map_df.loc[self.map_df['pair_id'] == idx, 'img_relative_path'].tolist()]
                 label = int(self.map_df.loc[self.map_df['pair_id'] == idx, 'label'].unique())
+                extra_idx = []
+            # For SimCLR, self.num_same_area = min 2
             else:
                 scan_path = [self.root.joinpath(self.map_df['img_relative_path'].iloc[idx])]
                 area = self.map_df['area_id'].iloc[idx]
@@ -162,10 +153,15 @@ class OCTDataset(Dataset): # Used in train_moco
                 self.map_df_sampling.loc[self.map_df_sampling.index.isin(extra_idx), 'weights'] = self.map_df_sampling.loc[self.map_df_sampling.index.isin(extra_idx), 'weights'] - 0.25
                 self.map_df_sampling.loc[self.map_df_sampling['weights'] < 0, 'weights'] = 0 # Set weight to 0 if it becomes negative
                 label = int(self.map_df['label'].iloc[idx])
-                # Get associated start and end idx within image
-                if self.sample_within_image > 1:
-                    img_idx_start = img_idx_start + self.map_df.loc[self.map_df.index.isin(extra_idx), 'img_idx_start'].tolist()
-                    img_idx_end = img_idx_end + self.map_df.loc[self.map_df.index.isin(extra_idx), 'img_idx_end'].tolist()
+            # Get associated start and end idx within image
+            if self.sample_within_image > 1:
+                img_idx_start = [self.map_df['img_idx_start'].iloc[idx]]
+                img_idx_end = [self.map_df['img_idx_end'].iloc[idx]]
+                img_idx_start = img_idx_start + self.map_df.loc[self.map_df.index.isin(extra_idx), 'img_idx_start'].tolist()
+                img_idx_end = img_idx_end + self.map_df.loc[self.map_df.index.isin(extra_idx), 'img_idx_end'].tolist()
+            else:
+                img_idx_start = []
+                img_idx_end = []
 
             # Read M-Scan
             data = [cv2.imread(scan_path) for scan_path in scan_paths]  # shape: (512, 512, 3)
@@ -210,6 +206,8 @@ class OCTDataset(Dataset): # Used in train_moco
             data = cv2.imread(scan_path)  # shape: (512, 512, 3)
             # Crop image to designed idx start and end
             if self.sample_within_image > 1:
+                img_idx_start = self.map_df['img_idx_start'].iloc[idx]
+                img_idx_end = self.map_df['img_idx_end'].iloc[idx]
                 data = data[:, img_idx_start:img_idx_end, :]
             data = Image.fromarray(data)
 

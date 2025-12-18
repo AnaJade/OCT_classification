@@ -1,11 +1,9 @@
 .idea
 __pycache__/*
-SPICE.zip
 SimCLR.zip
 brouillon.ipynb
 data_prep/df_split_dbg.xlsx
 *.png
-SPICE/tools/results/*
 SimCLR/weights*
 BYOL/weights*
 BYOL/*.pth
