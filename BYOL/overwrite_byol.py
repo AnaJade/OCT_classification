@@ -30,9 +30,8 @@ class BYOL_custom(BYOL):
         sync_batchnorm = None
     ):
         # Reset channel to 3 and iipp to false for super init
-        net_og = copy.deepcopy(net)
         if ch_in !=  3:
-            net = utils.update_backbone_channel(net, 3)
+            net_3ch = utils.update_backbone_channel(copy.deepcopy(net), 3)
             """
             if net.__class__.__name__ == 'ResNet':
                 net.conv1.in_channels = 3
@@ -41,12 +40,14 @@ class BYOL_custom(BYOL):
                 net.conv_proj.in_channels = 3
                 net.conv_proj.weight = nn.Parameter(torch.concat(3*[net.conv_proj.weight], dim=1))
             """
+        else:
+            net_3ch = copy.deepcopy(net)
         self.ch_in = 3
         self.use_iipp = False
-        super().__init__(net, image_size, hidden_layer, projection_size, projection_hidden_size, augment_fn,
+        super().__init__(net_3ch, image_size, hidden_layer, projection_size, projection_hidden_size, augment_fn,
                          augment_fn2, moving_average_decay, use_momentum, sync_batchnorm)
         # Reset to desired values
-        self.net = net_og
+        self.net = net
         self.ch_in = ch_in
         self.use_iipp = use_iipp
 

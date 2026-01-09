@@ -76,7 +76,7 @@ def update_backbone_channel(feature_model, ch_in: int):
     arch = feature_model.__class__.__name__
     if 'ResNet' in arch:
         layer = feature_model.conv1
-    elif 'VisionTransformer' == arch:
+    elif ('VisionTransformer' in arch) and ('PyramidVisionTransformer' not in arch):
         layer = feature_model.conv_proj
     elif ('EfficientNet' in arch) or ('SwinTransformer' in arch) or ('ConvNeXt' in arch):
         layer = feature_model.features[0][0]

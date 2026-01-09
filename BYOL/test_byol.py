@@ -32,7 +32,7 @@ from feature_model import get_backbone
 parent_dir = pathlib.Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import OCTDataset
+from utils_data import OCTDataset, build_image_root
 
 # Img size and moco_dim (nb of classes) values based on the dataset
 # Img size and moco_dim (nb of classes) values based on the dataset
@@ -116,6 +116,7 @@ class LogisticRegression(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
 
 class LogisticRegressionEvaluator(object):
     def __init__(self, n_features, n_classes, args):
@@ -233,6 +234,7 @@ class LogisticRegressionEvaluator(object):
         print(f"Recall @ epoch {best_epoch}: {best_epoch_recall}")
         print(f"ARI @ epoch {best_epoch}: {best_epoch_ari}")
 
+
 def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):
     train_dataset = datasets.STL10(root_path, split='train', download=download,
                                    transform=transforms.ToTensor())
@@ -299,6 +301,7 @@ def main():
         dataset_path = pathlib.Path(configs['BYOL']['dataset_path_windows'])
     labels = configs['data']['labels']
     ascan_per_group = configs['data']['ascan_per_group']
+    pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
     mean['oct'] = 3 * [configs['data']['img_mean']]
     std['oct'] = 3 * [configs['data']['img_std']]
@@ -307,11 +310,13 @@ def main():
 
     # Dataset
     args.dataset_name = configs['BYOL']['dataset_name']
-    args.data = pathlib.Path(dataset_path).joinpath('OCT_lab_data' if args.dataset_name == 'oct' else args.dataset_name)
-    print(f"args.data: {args.data}")
+    args.data = pathlib.Path(dataset_path).joinpath(
+        'OCT_lab_data' if args.dataset_name == 'oct' else args.dataset_name)
+    image_root = build_image_root(ascan_per_group, pre_processing)
+    print(f"dataset image root: {args.data.joinpath(image_root)}")
     args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
     args.map_df_paths = {
-        split: args.data.joinpath(f"{ascan_per_group}mscans").joinpath(
+        split: args.data.joinpath(image_root).joinpath(
             f"{split}{'Mini' if use_mini_dataset else ''}_mapping_{ascan_per_group}scans.csv")
         for split in ['train', 'valid', 'test']}
     args.img_channel = configs['BYOL']['img_channel']
@@ -338,12 +343,8 @@ def main():
     args.out_dim = num_cluster_dict[args.dataset_name]
     args.gpu_index = configs['BYOL']['gpu_index']
     args.patience = configs['BYOL']['patience']
-    save_folder = pathlib.Path().resolve().joinpath(f'weights_{args.arch}')
-    if not save_folder.is_dir():
-        save_folder.mkdir(parents=True)
-
-    chkpt_file = save_folder.joinpath(f'byol_best_loss.pt')
-
+    args.save_folder = pathlib.Path().resolve().joinpath(f'weights_{args.arch}')
+    chkpt_file = list(args.save_folder.rglob('byol_best_loss*.pt'))[0]
 
     # Set all random seeds
     print("Setting random seed...")

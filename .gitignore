@@ -4,7 +4,6 @@ SimCLR.zip
 brouillon.ipynb
 data_prep/df_split_dbg.xlsx
 *.png
-SimCLR/weights*
 BYOL/weights*
 BYOL/*.pth
 BYOL/__pycache__

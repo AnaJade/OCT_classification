@@ -3,14 +3,15 @@ import pathlib
 from sys import platform
 
 import numpy as np
+from addict import Dict
 from tqdm import tqdm
 import pandas as pd
 import cv2
 
 import utils
-from utils_data import open_mat_file, find_keywords
+from utils_data import open_mat_file, find_keywords, build_image_root
 
-def save_as_jpg(mat_file_root: pathlib.Path, target_jpg_root:pathlib.Path, ascan_per_group: int, labels: list, mini_dataset: bool):
+def save_as_img(mat_file_root: pathlib.Path, target_jpg_root:pathlib.Path, ascan_per_group: int, labels: list, mini_dataset: bool):
     """
     Load reconstructed scans (as .mat files) and save them into individual sections
     :param mat_file_root: path to .mat files
@@ -49,10 +50,9 @@ def save_as_jpg(mat_file_root: pathlib.Path, target_jpg_root:pathlib.Path, ascan
             target_img_subdir.mkdir(parents=True, exist_ok=True)
 
         # Check if file has already been converted
-        img_file_name = target_img_subdir.joinpath(
-            f"{'_'.join(f.stem.split('_')[:-2])}_0_{ascan_per_group}.jpg")
-        if img_file_name.exists():
-            print(f".jpg files for this trajectory have already been found.")
+        all_files = list(target_img_subdir.rglob("*.[jpg][png]*"))
+        if len(all_files) > 0:
+            print(f".jpg or png files for this trajectory have already been found.")
             print(f"Skipping to next trajectory...")
             continue
 
@@ -77,7 +77,7 @@ def save_as_jpg(mat_file_root: pathlib.Path, target_jpg_root:pathlib.Path, ascan
     print("Done saving .mat files as individual images.")
 
 
-def get_jpg_dataset_info(dataset_root:pathlib.Path, jpg_root_path:pathlib.Path, labels: list) -> pd.DataFrame:
+def get_img_dataset_info(dataset_root:pathlib.Path, jpg_root_path:pathlib.Path, labels: list) -> pd.DataFrame:
     """
     Get relative path, label, idx_start and idx_end for every available jpg image
     :param dataset_root: dataset root path
@@ -85,8 +85,8 @@ def get_jpg_dataset_info(dataset_root:pathlib.Path, jpg_root_path:pathlib.Path, 
     :param labels: list of possible labels
     :return: df with the info
     """
-    print("Getting info on available .jpg files...")
-    img_paths = {f.stem: list(f.rglob("*.jpg")) for f in list(jpg_root_path.iterdir())}
+    print("Getting info on available .jpg or .png files...")
+    img_paths = {f.stem: list(f.rglob("*.[jpg][png]*")) for f in list(jpg_root_path.iterdir())}
     img_paths = pd.DataFrame([(a, f) for a, files in img_paths.items() for f in files], columns=['folder', 'path'])
     img_paths['img_relative_path'] = [p.relative_to(dataset_root) for p in img_paths['path']]
     img_paths['trajectory'] = ['_'.join(p.stem.split('_')[:-2]) for p in img_paths['path']]
@@ -301,18 +301,25 @@ if __name__ == '__main__':
     ds_split = configs['data']['ds_split']
     labels = configs['data']['labels']
     ascan_per_group = configs['data']['ascan_per_group']
+    pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
 
     # Dataset target path (if different then dataset_root)
     # target_path = pathlib.Path(r"C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data")
     target_path = pathlib.Path(r"/data/Boudreault/OCT_lab_data")
-    img_root_path = target_path.joinpath(f"{ascan_per_group}mscans")
+    # img_root_path = target_path.joinpath(f"{ascan_per_group}mscans")
+    img_root_path = target_path.joinpath(build_image_root(ascan_per_group, pre_processing))
 
     # Save images as individual .jpg chunks
-    save_as_jpg(dataset_root, img_root_path, ascan_per_group, labels, use_mini_dataset)
+    save_as_img(dataset_root, img_root_path, ascan_per_group, labels, use_mini_dataset)
 
     # Get jpg file info
-    jpg_files_info = get_jpg_dataset_info(target_path, img_root_path, labels)
+    jpg_files_info = get_img_dataset_info(target_path, img_root_path, labels)
+
+    # Update idx_end to idx_start + ascan_per_group for new Matlab-generated images
+    #   Due to noise removal and sampling, idx_end - idx_start no longer equals ascan_per_group
+    if ('noNoise' in img_root_path.stem) or ('sample' in img_root_path.stem):
+        jpg_files_info.loc[:, 'idx_end'] = jpg_files_info.loc[:, 'idx_start'] + ascan_per_group-1
 
     # Split into train-valid-test
     df_split = split_train_valid_test(ds_split, jpg_files_info, labels)

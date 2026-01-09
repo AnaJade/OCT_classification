@@ -96,9 +96,11 @@ class OCTDataset(Dataset): # Used in train_moco
             self.map_df.loc[:, 'img_idx_end'] = self.map_df.loc[:, 'idx_end']
             new_img_count = round(ascan_per_group / self.sample_within_image) # Get new count of images, faire comme si les images étaient générées avec le new ascan count
             self.map_df = pd.concat([self.map_df]*new_img_count, axis=0).sort_index().reset_index(drop=True)
-            self.map_df = self.map_df.loc[self.map_df['idx_start'] <= self.map_df['idx_end'] - ascan_per_group, :] # Comment after debug
+            # self.map_df = self.map_df.loc[self.map_df['idx_start'] <= self.map_df['idx_end'] - ascan_per_group, :] # Comment after debug
             self.map_df.loc[:, 'img_idx_start'] = [randint(0, ascan_per_group-self.sample_within_image) for _ in self.map_df.index.tolist()]
             self.map_df.loc[:, 'img_idx_end'] = self.map_df.loc[:, 'img_idx_start'] + self.sample_within_image
+        elif self.sample_within_image == -1:
+            pass
         else:
             print(f'Cannot sample {self.sample_within_image} A-scans from within {ascan_per_group} A-scan images')
 

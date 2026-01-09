@@ -78,10 +78,14 @@ if __name__ == "__main__":
 
     # Dataset
     args.dataset_name = configs['BYOL']['dataset_name']
+    args.scan_no_noise = configs['data']['pre_processing']['no_noise'] # Add to args for logging
+    args.scan_use_movmean = configs['data']['pre_processing']['use_movmean']  # Add to args for logging
+    args.scan_use_speckle = configs['data']['pre_processing']['use_speckle']  # Add to args for logging
+    args.scan_sampling = configs['data']['pre_processing']['ascan_sampling']  # Add to args for logging
     dataset_root = pathlib.Path(dataset_path).joinpath(
         'OCT_lab_data' if args.dataset_name == 'oct' else args.dataset_name)
-    print(f"dataset_root: {dataset_root}")
     image_root = build_image_root(ascan_per_group, pre_processing)
+    print(f"dataset image root: {dataset_root.joinpath(image_root)}")
     args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
     args.map_df_paths = {
         split: dataset_root.joinpath(image_root).joinpath(
@@ -119,7 +123,7 @@ if __name__ == "__main__":
     wandb_log = configs['wandb']['wandb_log']
     project_name = configs['wandb']['project_name']
     if project_name != 'Test-project':
-        project_name = 'BYOL'
+        project_name = 'OCT_BYOL'
 
     # Set all random seeds
     print("Setting random seed...")
@@ -158,6 +162,8 @@ if __name__ == "__main__":
                           transforms.Resize((args.img_reshape, args.img_reshape)),
                           transforms.Normalize(mean=mean[args.dataset_name],
                                                std=std[args.dataset_name])]
+        if (args.sample_within_image <= 0) and (args.img_reshape <= 480):
+            img_transforms.insert(1, transforms.CenterCrop(480))
         if args.img_channel == 1:
             img_transforms.append(transforms.Grayscale())
         img_transforms = transforms.Compose(img_transforms)
@@ -215,8 +221,8 @@ if __name__ == "__main__":
             augment_fn2=aug
         )
 
-        # opt = torch.optim.Adam(learner.parameters(), lr=args.lr)
-        opt = torch.optim.SGD(learner.parameters(), lr=args.lr)
+        opt = torch.optim.Adam(learner.parameters(), lr=args.lr)
+        # opt = torch.optim.SGD(learner.parameters(), lr=args.lr)
 
         # Train
         if wandb_log:
@@ -251,6 +257,8 @@ if __name__ == "__main__":
                     utils.wandb_log('batch', loss=loss)
 
             avg_epoch_loss = float(torch.mean(torch.stack(avg_epoch_loss)).cpu().detach().numpy())
+            if wandb_log:
+                utils.wandb_log('epoch', loss=avg_epoch_loss)
             if avg_epoch_loss < best_loss:
                 print(f'New best loss achieved @ epoch {e}: {avg_epoch_loss}')
                 best_epoch = e
