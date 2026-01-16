@@ -8,7 +8,7 @@ from byol_pytorch.byol_pytorch import default, get_module_device, loss_fn, Rando
 from torchvision import transforms as T
 
 # Import utils
-parent_dir = pathlib.Path(__file__).resolve().parent.parent.parent
+parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
 

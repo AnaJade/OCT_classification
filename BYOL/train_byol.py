@@ -22,7 +22,7 @@ from torchvision.datasets import STL10
 from feature_model import get_backbone
 
 # Import utils
-parent_dir = pathlib.Path(__file__).resolve().parent.parent.parent
+parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
 from utils_data import OCTDataset, build_image_root
