@@ -9,7 +9,7 @@
 #SBATCH -e errorlog_gpu_%j.out # sbatch errorlog
 
 # --- Load toolchain modules ---
-./etc/profile.d/module.sh # probably always necessary to make module available?
+# ./etc/profile.d/module.sh # probably always necessary to make module available?
 module load conda # load a module
 
 # activate conda env
@@ -45,4 +45,6 @@ mkdir -p $HF_HOME $PIP_CACHE_DIR $TORCH_HOME
 
 
 #--- Run Training ---
-python BYOL/train_byol.py --config config.yaml
+python /fibus/fs0/14/cab8351/OCT_classification/BYOL/train_byol.py --config config.yaml
+
+#

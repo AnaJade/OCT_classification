@@ -15,7 +15,6 @@ from torch import nn
 import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from byol_pytorch import BYOL
 from overwrite_byol import BYOL_custom
 from torchvision import models
 from torchvision.datasets import STL10
