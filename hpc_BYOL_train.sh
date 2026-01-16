@@ -45,6 +45,6 @@ mkdir -p $HF_HOME $PIP_CACHE_DIR $TORCH_HOME
 
 
 #--- Run Training ---
-python /fibus/fs0/14/cab8351/OCT_classification/BYOL/train_byol.py --config config.yaml
+python $HOME/OCT_classification/BYOL/train_byol.py --config $HOME/OCT_classification/config.yaml
 
 #
