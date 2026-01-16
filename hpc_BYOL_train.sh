@@ -28,7 +28,7 @@ rm -rf "$SCRATCH/experiments" "$SCRATCH/cache" 2>/dev/null || true
 
 #--- Copy Data to Temporary Workspace ---
 echo "--- Copying data to SCRATCH... ---"
-rsync -a --info=progress2 "$WORK/<data_dir> /" "$MYWORKDIR/<data_dir>"
+rsync -a --info=progress2 "$WORK/OCT_lab_data/512mscans_noNoise_sample20" "$MYWORKDIR/OCT_lab_data"
 cd "$MYWORKDIR"
 pwd
 ls

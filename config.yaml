@@ -23,6 +23,7 @@ SimCLR:
   dataset_name: oct  # [stl10, cifar10, cifar100]
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
   dataset_path_linux: /data/Boudreault
+  dataset_path_hpc: $SCRATCH
   img_channel: 1
   sample_within_image: -1 # Set to -1 for no sampling
   img_reshape: 480
@@ -47,6 +48,7 @@ BYOL:
   dataset_name: oct  # [stl10, cifar10, cifar100]
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
   dataset_path_linux: /data/Boudreault
+  dataset_path_hpc: $SCRATCH
   img_channel: 1
   sample_within_image: -1
   img_reshape: 480 # 480, 224 for ViT
@@ -62,5 +64,5 @@ BYOL:
   gpu_index: 0
   patience: 20
 wandb:
-  wandb_log: False
+  wandb_log: True
   project_name: None # 'Test-project' # 'Test-project'  'Mandible-tracking'
