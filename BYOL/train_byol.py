@@ -64,12 +64,14 @@ if __name__ == "__main__":
 
     configs = utils.load_configs(config_file)
     if platform == "linux" or platform == "linux2":
+        print(f"socket name: {socket.gethostname()}")
         if 'hpc' in socket.gethostname() or 'u00' in socket.gethostname():
             dataset_path = pathlib.Path(configs['BYOL']['dataset_path_hpc'])
         else:
             dataset_path = pathlib.Path(configs['BYOL']['dataset_path_linux'])
     elif platform == "win32":
         dataset_path = pathlib.Path(configs['BYOL']['dataset_path_windows'])
+    print(f"dataset path: {dataset_path}")
     labels = configs['data']['labels']
     ascan_per_group = configs['data']['ascan_per_group']
     pre_processing = Dict(configs['data']['pre_processing'])

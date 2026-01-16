@@ -23,7 +23,7 @@ SimCLR:
   dataset_name: oct  # [stl10, cifar10, cifar100]
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
   dataset_path_linux: /data/Boudreault
-  dataset_path_hpc: $SCRATCH
+  dataset_path_hpc: /usertemp/mts/cab8351
   img_channel: 1
   sample_within_image: -1 # Set to -1 for no sampling
   img_reshape: 480
@@ -48,7 +48,7 @@ BYOL:
   dataset_name: oct  # [stl10, cifar10, cifar100]
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
   dataset_path_linux: /data/Boudreault
-  dataset_path_hpc: $SCRATCH
+  dataset_path_hpc: /usertemp/mts/cab8351
   img_channel: 1
   sample_within_image: -1
   img_reshape: 480 # 480, 224 for ViT
@@ -58,7 +58,7 @@ BYOL:
   use_pretrained: True
   num_workers: 0
   max_epochs: 500
-  batch_size: 4 # 32 # 256
+  batch_size: 256
   lr: 0.0003
   disable_cuda: False
   gpu_index: 0
