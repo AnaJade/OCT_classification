@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     configs = utils.load_configs(config_file)
     if platform == "linux" or platform == "linux2":
-        if 'hpc' in socket.gethostname():
+        if 'hpc' in socket.gethostname() or 'u00' in socket.gethostname():
             dataset_path = pathlib.Path(configs['BYOL']['dataset_path_hpc'])
         else:
             dataset_path = pathlib.Path(configs['BYOL']['dataset_path_linux'])
