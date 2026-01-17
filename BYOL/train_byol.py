@@ -124,6 +124,7 @@ if __name__ == "__main__":
     save_folder = pathlib.Path().resolve().joinpath(f'weights_{args.arch}')
     if not save_folder.is_dir():
         save_folder.mkdir(parents=True)
+    print(f"Saving weights to: {save_folder}")
 
     wandb_log = configs['wandb']['wandb_log']
     project_name = configs['wandb']['project_name']

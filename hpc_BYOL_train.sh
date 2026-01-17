@@ -34,7 +34,7 @@ pwd
 ls
 
 #--- Set Cache Directories --- 
-export WANDB_API_KEY="8ab9b1718d14ea7c2ca1"
+export WANDB_API_KEY="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"
 export HF_HOME="$MYWORKDIR/.cache/huggingface"
 export PIP_CACHE_DIR="$MYWORKDIR/.cache/pip"
 export TORCH_HOME="$MYWORKDIR/.cache/torch"
