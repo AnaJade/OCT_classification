@@ -121,7 +121,11 @@ if __name__ == "__main__":
     args.out_dim = num_cluster_dict[args.dataset_name]
     args.gpu_index = configs['BYOL']['gpu_index']
     args.patience = configs['BYOL']['patience']
-    save_folder = pathlib.Path().resolve().joinpath(f'weights_{args.arch}')
+    if (platform == "linux" or platform == "linux2") and ('hpc' in socket.gethostname() or 'u00' in socket.gethostname()):
+        print(f"socket name: {socket.gethostname()}")
+        save_folder = pathlib.Path(r'/fibus/fs0/14/cab8351/OCT_classification/BYOL').joinpath(f'weights_{args.arch}')
+    else:
+        save_folder = pathlib.Path().resolve().joinpath(f'weights_{args.arch}')
     if not save_folder.is_dir():
         save_folder.mkdir(parents=True)
     print(f"Saving weights to: {save_folder}")

@@ -14,7 +14,7 @@ data:
     use_movmean: False
     use_speckle: False
     ascan_sampling: 20 # Baseline: 20, Set to 1 for no sampling
-  use_mini_dataset: True  # Use only files with speed 8 to limit data storage size
+  use_mini_dataset: False  # Use only files with speed 8 to limit data storage size
   img_mean: 179.131 # Mini: 179.130, Full: 179.131
   img_std: 21.1 # Mini: 21.09, Full: 21.10
 training:
@@ -58,7 +58,7 @@ BYOL:
   use_pretrained: True
   num_workers: 0
   max_epochs: 500
-  batch_size: 256
+  batch_size: 128
   lr: 0.0003
   disable_cuda: False
   gpu_index: 0
