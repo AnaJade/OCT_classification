@@ -33,6 +33,9 @@ def get_backbone(arch: str, pretrained: bool):
     elif arch == 'efficientnetV2s':
         feature_model = models.efficientnet_v2_s(weights=weights)
         feature_layer = 'avgpool'
+    elif arch == 'efficientnetb3':
+        feature_model = models.efficientnet_b3(weights=weights)
+        feature_layer = 'avgpool'
     elif arch == 'swinv2t':
         feature_model = models.swin_v2_t(weights=weights)
         feature_layer = 'avgpool'
