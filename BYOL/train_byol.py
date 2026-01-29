@@ -252,16 +252,30 @@ if __name__ == "__main__":
                     train_loader.dataset.create_iipp_map_df()
             for images, _ in tqdm(train_loader):
                 # images = torch.randn(20, 3, 256, 256)
-                with torch.autocast(device_type=f'cuda:{args.gpu_index}', dtype=torch.float16):
-                    if args.use_iipp:
-                        images, meta_data = images
-                    images = images.to(args.device)
-                    loss = learner(images)
+                # with torch.autocast(device_type=f'cuda:{args.gpu_index}', dtype=torch.float16):
+                # with torch.autograd.detect_anomaly():
+                if args.use_iipp:
+                    images, meta_data = images
+                images = images.to(args.device)
+                loss = learner(images)
                 opt.zero_grad()
                 loss.backward()
                 opt.step()
                 learner.update_moving_average() # update moving average of target encoder
                 avg_epoch_loss.append(loss)
+
+                ########################################
+                # DEBUG
+                # Check if any weight is none
+                # named_parameters = {n: p for (n, p) in list(learner.online_encoder.named_parameters())}
+                # for name, param in named_parameters.items():
+                #     if not torch.isfinite(param.data).all():
+                #         print(f"{name} has invalid parameters")
+                #     if param.grad is None:
+                #         print(f"{name} has no gradients")
+                #     elif not torch.isfinite(param.grad.data).all():
+                #         print(f"{name} has invalid gradients")
+                ########################################
 
                 if wandb_log:
                     utils.wandb_log('batch', loss=loss)

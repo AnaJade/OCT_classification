@@ -217,6 +217,8 @@ class OCTDataset(Dataset): # Used in train_moco
             if self.transforms is not None:
                 data = self.transforms(data)
 
+        # Convert labels to one-hot
+        label = torch.nn.functional.one_hot(torch.tensor(label), len(self.label_dict)).to(torch.float16)
         # Add metadata if iipp is used
         if self.use_iipp:
             metadata = self.map_df['area_id'].iloc[idx]
@@ -235,6 +237,16 @@ class OCTDataset(Dataset): # Used in train_moco
     def reset_sampling_weights(self):
         self.map_df_sampling.loc[:, 'weights'] = 1
 
+
+class OCTClinicalDataset(OCTDataset):
+    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, ch_in=3, sample_within_image=-1, use_iipp=False, num_same_area=-1, transforms=None, preload_data=False, pre_shuffle=True, pre_sample=1):
+        super.__init__(self, root, split, map_df_paths, labels_dict, ch_in, sample_within_image, False, -1, transforms, False, False, pre_sample)
+        pass
+
+        # TODO: Update label in map_df based on labeling scheme
+
+    def __getitem__(self, idx):
+        pass
 
 def open_mat_file(file: pathlib.Path):
     with open(file, 'rb') as f:
