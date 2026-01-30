@@ -231,7 +231,7 @@ if __name__ == "__main__":
             augment_fn2=aug
         )
 
-        opt = torch.optim.Adam(learner.parameters(), lr=args.lr)
+        opt = torch.optim.Adam(learner.parameters(), lr=args.lr, eps=6e-5)
         # opt = torch.optim.SGD(learner.parameters(), lr=args.lr)
 
         # Train
@@ -252,17 +252,17 @@ if __name__ == "__main__":
                     train_loader.dataset.create_iipp_map_df()
             for images, _ in tqdm(train_loader):
                 # images = torch.randn(20, 3, 256, 256)
-                # with torch.autocast(device_type=f'cuda:{args.gpu_index}', dtype=torch.float16):
+                with torch.autocast(device_type=f'cuda:{args.gpu_index}', dtype=torch.float16):
                 # with torch.autograd.detect_anomaly():
-                if args.use_iipp:
-                    images, meta_data = images
-                images = images.to(args.device)
-                loss = learner(images)
-                opt.zero_grad()
-                loss.backward()
-                opt.step()
-                learner.update_moving_average() # update moving average of target encoder
-                avg_epoch_loss.append(loss)
+                    if args.use_iipp:
+                        images, meta_data = images
+                    images = images.to(args.device)
+                    loss = learner(images)
+                    opt.zero_grad()
+                    loss.backward()
+                    opt.step()
+                    learner.update_moving_average() # update moving average of target encoder
+                    avg_epoch_loss.append(loss)
 
                 ########################################
                 # DEBUG
