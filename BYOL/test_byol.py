@@ -207,7 +207,8 @@ class LogisticRegressionEvaluator(object):
             acc, logits_epoch, y_true_epoch = self.eval(test_loader)
 
             # Get other metrics
-            preds_epoch = logits_epoch.argmax(1)
+            test_probs = F.softmax(logits_epoch, dim=1)
+            preds_epoch = test_probs.argmax(1)
             eval_df_epoch = pd.DataFrame(torch.vstack((y_true_epoch.cpu(), preds_epoch.cpu())).T, columns=['label', 'pred'])
             # Calculate other metrics
             # Precision and recall

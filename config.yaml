@@ -76,12 +76,12 @@ finetune:
   approach: byol # simclr, byol
   arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
   num_workers: 0
-  max_epochs: 1 # 500
+  max_epochs: 10 # 500
   batch_size: 16
   lr: 0.00005
   disable_cuda: False
   gpu_index: 0
-  patience: 1
+  patience: 2
 wandb:
   wandb_log: True
   project_name: None # 'Test-project' # 'Test-project'  'Mandible-tracking'
