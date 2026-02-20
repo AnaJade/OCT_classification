@@ -122,23 +122,40 @@ def set_classifier_head(feature_model, num_classes):
     elif 'PyramidVisionTransformer' in arch:
         dim_mlp = feature_model.head.in_features
         feature_model.head = nn.Sequential(nn.Linear(dim_mlp, num_classes))
-    """
-    if 'ResNet' in arch:
-        feature_model.fc.out_features = num_classes
-    elif ('VisionTransformer' in arch) and ('PyramidVisionTransformer' not in arch):
-        feature_model.heads.head.out_features = num_classes
-    elif ('EfficientNet' in arch) or ('ConvNeXt' in arch):
-        feature_model.classifier[-1].out_features = num_classes
-    elif ('SwinTransformer' in arch) or ('PyramidVisionTransformer' in arch):
-        feature_model.head.out_features = num_classes
-        feature_model.num_classes = num_classes
-    """
-
     return feature_model
 
+def set_classifier_head_SimCLR(feature_model, num_classes):
+    """
+    Update classifier head to be a single layer
+    :param feature_model: model to be updated
+    :param num_classes: number of outputs in the last layer
+    :return:
+    """
+    arch = feature_model.__class__.__name__
+    if 'ResNet' in arch:
+        dim_mlp = feature_model.fc[0].in_features
+        feature_model.fc = nn.Sequential(nn.Linear(dim_mlp, num_classes))
+    elif ('VisionTransformer' in arch) and ('PyramidVisionTransformer' not in arch):
+        dim_mlp = feature_model.heads.head[0].in_features
+        feature_model.heads.head = nn.Sequential(nn.Linear(dim_mlp, num_classes))
+    elif 'EfficientNet' in arch:
+        dim_mlp = feature_model.classifier[1].in_features
+        feature_model.classifier = nn.Sequential(
+            list(feature_model.classifier)[0],
+            nn.Linear(dim_mlp, num_classes))
+    elif 'SwinTransformer' in arch:
+        dim_mlp = feature_model.head[0].in_features
+        feature_model.head = nn.Sequential(nn.Linear(dim_mlp, num_classes))
+    elif 'ConvNeXt' in arch:
+        dim_mlp = feature_model.classifier[2].in_features
+        feature_model.classifier = nn.Sequential(
+            *list(feature_model.classifier)[:2],
+            nn.Linear(dim_mlp, num_classes))
+    elif 'PyramidVisionTransformer' in arch:
+        dim_mlp = feature_model.head[0].in_features
+        feature_model.head = nn.Sequential(nn.Linear(dim_mlp, num_classes))
 
-def calculate_metrics(preds, labels):
-    pass
+    return feature_model
 
 
 if __name__ == '__main__':

@@ -218,7 +218,10 @@ class OCTDataset(Dataset): # Used in train_moco
                 data = self.transforms(data)
 
         # Convert labels to one-hot
-        label = torch.nn.functional.one_hot(torch.tensor(label), len(self.label_dict)).to(torch.float16)
+        if len(self.label_dict) > 2:
+            label = torch.nn.functional.one_hot(torch.tensor(label), len(self.label_dict)).to(torch.float16)
+        else:
+            label = torch.Tensor([label]).to(torch.float16)
         # Add metadata if iipp is used
         if self.use_iipp:
             metadata = self.map_df['area_id'].iloc[idx]

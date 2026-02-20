@@ -23,10 +23,10 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from torchvision import datasets
 import torch.nn as nn
+import torch.nn.functional as F
 from sklearn.metrics import precision_score, recall_score, adjusted_rand_score, normalized_mutual_info_score
 
-from byol_pytorch import BYOL
-from feature_model import get_backbone
+from BYOL.feature_model import get_backbone
 
 # Import utils
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
@@ -34,7 +34,6 @@ sys.path.append(str(parent_dir))
 import utils
 from utils_data import OCTDataset, build_image_root
 
-# Img size and moco_dim (nb of classes) values based on the dataset
 # Img size and moco_dim (nb of classes) values based on the dataset
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
@@ -77,6 +76,7 @@ class FeatureExtractor(object):
             self.model = utils.update_backbone_channel(self.model, args.img_channel)
 
         # Load weights
+        print(f"Loading weights from {self.ckp_file}...")
         state_dict = torch.load(self.ckp_file, map_location=self.args.device)
         if 'state_dict' in state_dict.keys():
             state_dict = state_dict['state_dict']
@@ -151,7 +151,9 @@ class LogisticRegressionEvaluator(object):
                 batch_x, batch_y = batch_x.to(self.args.device), batch_y.to(self.args.device)
                 logits = self.log_regression(batch_x)
 
-                predicted = torch.argmax(logits, dim=1)
+                test_probs = F.softmax(logits, dim=1)
+                predicted = torch.argmax(test_probs, dim=1)
+                batch_y = torch.argmax(batch_y, dim=1)
                 total += batch_y.size(0)
                 correct += (predicted == batch_y).sum().item()
 
@@ -182,8 +184,9 @@ class LogisticRegressionEvaluator(object):
 
         weight_decay = self._sample_weight_decay()
 
-        optimizer = torch.optim.Adam(self.log_regression.parameters(), 3e-4, weight_decay=weight_decay)
-        criterion = torch.nn.CrossEntropyLoss()
+        # optimizer = torch.optim.Adam(self.log_regression.parameters(), 3e-4, weight_decay=weight_decay)
+        optimizer = torch.optim.AdamW(self.log_regression.parameters(), lr=self.args.lr, weight_decay=weight_decay)
+        criterion = torch.nn.BCEWithLogitsLoss()
 
         best_nmi = 0
         best_epoch_acc = 0
@@ -197,7 +200,7 @@ class LogisticRegressionEvaluator(object):
                 batch_x, batch_y = batch_x.to(self.args.device), batch_y.to(self.args.device)
                 optimizer.zero_grad()
                 logits = self.log_regression(batch_x)
-                loss = criterion(logits, batch_y)
+                loss = criterion(logits.type(torch.float32), batch_y.type(torch.float32))
                 loss.backward()
                 optimizer.step()
 

@@ -7,5 +7,6 @@ data_prep/df_split_dbg.xlsx
 BYOL/weights*
 BYOL/*.pth
 BYOL/__pycache__
+BYOL/wandb
 nvidia-bug-report.log.gz
 nvidia-debugdump-temp2119908.log

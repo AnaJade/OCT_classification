@@ -231,7 +231,8 @@ if __name__ == "__main__":
             augment_fn2=aug
         )
 
-        opt = torch.optim.Adam(learner.parameters(), lr=args.lr) # , eps=6e-5)
+        # opt = torch.optim.Adam(learner.parameters(), lr=args.lr) # , eps=6e-5)
+        opt = torch.optim.AdamW(learner.parameters(), lr=args.lr)
         # opt = torch.optim.SGD(learner.parameters(), lr=args.lr)
 
         # Train

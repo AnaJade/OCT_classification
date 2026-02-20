@@ -6,7 +6,7 @@ from torch import nn
 from torchvision import models
 from torchvision.datasets import STL10
 
-from overwrite_ViT import vit_b_16_byol, vit_b_16_512_byol, vit_h_14_byol
+from BYOL.overwrite_ViT import vit_b_16_byol, vit_b_16_512_byol, vit_h_14_byol
 
 
 def get_backbone(arch: str, pretrained: bool):

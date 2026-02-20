@@ -63,6 +63,25 @@ BYOL:
   disable_cuda: False
   gpu_index: 0
   patience: 20
+finetune:
+  dataset_name: oct_clinical  # [stl10, cifar10, cifar100]
+  dataset_path_windows: X:\Boudreault # C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  dataset_path_linux: /data/Boudreault
+  dataset_path_hpc: /usertemp/mts/cab8351
+  img_channel: 1
+  sample_within_image: -1
+  img_reshape: 480 # 480, 224 for ViT
+  use_iipp: True
+  dataset_sample: 1 # 0.25  # Sample of the entire dataset
+  approach: byol # simclr, byol
+  arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
+  num_workers: 0
+  max_epochs: 1 # 500
+  batch_size: 16
+  lr: 0.00005
+  disable_cuda: False
+  gpu_index: 0
+  patience: 1
 wandb:
   wandb_log: True
   project_name: None # 'Test-project' # 'Test-project'  'Mandible-tracking'
