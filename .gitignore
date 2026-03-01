@@ -9,6 +9,6 @@ BYOL/*.pth
 BYOL/__pycache__
 BYOL/wandb
 DINOv3/weights*
-BYOL/__pycache__
+DINOv3/__pycache__
 nvidia-bug-report.log.gz
 nvidia-debugdump-temp2119908.log

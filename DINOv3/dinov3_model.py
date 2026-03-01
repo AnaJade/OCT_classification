@@ -120,7 +120,9 @@ class DINO_LoRA(torch.nn.Module):
         total_params = sum(p.numel() for p in self.dino_model.parameters())
         print(f"Total trainable params: {trainable_params:,} / {total_params:,}")
 
-    def train(self, train_loader, valid_loader, criterion, opt):
+    def train(self, train_loader, valid_loader, criterion, opt, wandb_log=False, project_name=None):
+        if wandb_log:
+            utils.wandb_init(project_name, hyperparams=vars(self.args))
         best_epoch = 0
         best_valid_loss = 1e6
         for epoch in range(self.args.epochs):
@@ -145,8 +147,12 @@ class DINO_LoRA(torch.nn.Module):
                 batch_loss.backward()
                 opt.step()
                 avg_epoch_train_loss.append(batch_loss)
+                if wandb_log:
+                    utils.wandb_log('batch', loss=batch_loss)
             avg_epoch_train_loss = float(torch.mean(torch.stack(avg_epoch_train_loss)).cpu().detach().numpy())
             print(f"Average epoch train loss: {avg_epoch_train_loss}")
+            if wandb_log:
+                utils.wandb_log('epoch', train_loss=avg_epoch_train_loss)
 
             # Get validation loss
             self.dino_model.eval()
@@ -159,6 +165,8 @@ class DINO_LoRA(torch.nn.Module):
                     avg_epoch_valid_loss.append(batch_loss)
                 avg_epoch_valid_loss = float(torch.mean(torch.stack(avg_epoch_valid_loss)).cpu().detach().numpy())
                 print(f"Average epoch valid loss: {avg_epoch_valid_loss}")
+                if wandb_log:
+                    utils.wandb_log('epoch', valid_loss=avg_epoch_valid_loss)
 
             if avg_epoch_valid_loss < best_valid_loss:
                 print(f'New best loss achieved @ epoch {epoch}: {avg_epoch_valid_loss}')
@@ -181,7 +189,7 @@ class DINO_LoRA(torch.nn.Module):
             # Overwrite with saved weights
             lora_weights = torch.load(self.lora_best_weights_path, map_location=self.device, weights_only=True)
             # Double check weights
-            # lora_layers = list(lora_weights.keys())
+            lora_layers = list(lora_weights.keys())
             # print([model_weights[l].equal(lora_weights[l]) for l in lora_layers])
             # Load into model
             updated_weights = {l:w if w not in list(lora_weights.keys()) else lora_layers[l] for l, w in model_weights.items()}
