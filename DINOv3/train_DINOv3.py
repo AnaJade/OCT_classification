@@ -283,7 +283,7 @@ with torch.cuda.device(args.gpu_index):
         # Train linear layer and LoRA
         criterion = nn.BCEWithLogitsLoss()
         opt = torch.optim.AdamW(learner.parameters(), lr=args.lr, weight_decay=0.1) # , eps=6e-5)
-        learner.train(train_loader, valid_loader, criterion, opt)
+        learner.train(train_loader, valid_loader, criterion, opt, wandb_log, project_name)
 
         # Get test set performance
         test_logits, test_oh_labels = learner.test(test_loader)
@@ -301,48 +301,3 @@ with torch.cuda.device(args.gpu_index):
         report = classification_report(test_labels, test_preds, target_names=labels)
         print(report)
 
-        # Train
-        # if wandb_log:
-        #     utils.wandb_init(project_name, hyperparams=vars(args))
-        # best_epoch = 0
-        # best_loss = 1e6
-        # for e in range(args.epochs):
-        #     print(f"\n================================\n"
-        #           f"Epoch {e}")
-        #     if (e - best_epoch) >= args.patience:
-        #         print(f'Loss has not improved for {args.patience} epochs. Training has stopped')
-        #         print(f'Best loss was {best_loss} @ epoch {best_epoch}')
-        #         break
-        #     avg_epoch_loss = []
-        #     for images, labels in tqdm(train_loader, desc='Training'):
-        #         # images = torch.randn(20, 3, 256, 256)
-        #         # with torch.autocast(device_type=f'cuda:{args.gpu_index}', dtype=torch.float16):
-        #         # with torch.autograd.detect_anomaly():
-        #         images = images.to(args.device)
-        #         labels = labels.to(args.device)
-        #         loss = learner(images)
-        #         opt.zero_grad()
-        #         loss.backward()
-        #         opt.step()
-        #         learner.update_moving_average() # update moving average of target encoder
-        #         avg_epoch_loss.append(loss)
-#
-        #         if wandb_log:
-        #             utils.wandb_log('batch', loss=loss)
-#
-        #     avg_epoch_loss = float(torch.mean(torch.stack(avg_epoch_loss)).cpu().detach().numpy())
-        #     if wandb_log:
-        #         utils.wandb_log('epoch', loss=avg_epoch_loss)
-        #     if avg_epoch_loss < best_loss:
-        #         print(f'New best loss achieved @ epoch {e}: {avg_epoch_loss}')
-        #         best_epoch = e
-        #         best_loss = avg_epoch_loss
-        #         torch.save(feature_model.state_dict(), save_folder.joinpath(f'byol_best_loss.pt'))
-        #     if (e+1)%10 == 0:
-        #         torch.save(feature_model.state_dict(), save_folder.joinpath('byol_{:04d}.pth.tar'.format(e)))
-#
-        # # save your improved network
-        # torch.save(feature_model.state_dict(), save_folder.joinpath('byol_{:04d}_last.pth.tar'.format(e)))
-        # # Update best model name to include epoch
-        # best_weights_path = save_folder.joinpath(f'byol_best_loss.pt')
-        # best_weights_path.rename(best_weights_path.parent.joinpath(f'byol_best_loss_{best_epoch:04d}.pt'))
