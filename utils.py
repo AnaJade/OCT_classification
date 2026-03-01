@@ -79,8 +79,13 @@ def update_backbone_channel(feature_model, ch_in: int):
     elif ('VisionTransformer' in arch) and ('PyramidVisionTransformer' not in arch):
         layer = feature_model.conv_proj
     elif ('EfficientNet' in arch) or ('SwinTransformer' in arch) or ('ConvNeXt' in arch):
-        layer = feature_model.features[0][0]
+        try:
+            layer = feature_model.features[0][0]
+        except AttributeError: # ConvNeXt from DINO
+            layer = feature_model.stem[0]
     elif 'PyramidVisionTransformer' in arch:
+        layer = feature_model.patch_embed.proj
+    elif 'Eva' in arch: # DINOv3 ViT
         layer = feature_model.patch_embed.proj
 
     layer.in_channels = ch_in
@@ -123,6 +128,7 @@ def set_classifier_head(feature_model, num_classes):
         dim_mlp = feature_model.head.in_features
         feature_model.head = nn.Sequential(nn.Linear(dim_mlp, num_classes))
     return feature_model
+
 
 def set_classifier_head_SimCLR(feature_model, num_classes):
     """

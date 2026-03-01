@@ -21,6 +21,7 @@ Also install the following packages:
 * tensorboard: `pip install tensorboard` (for SPICE - double check if still needed)
   * Modify protobuf version as needed: `pip install protobuf==3.20.3 --upgrade` ([Source](https://stackoverflow.com/a/75844470))
 * BYOL model: `pip install byol-pytorch`
+* Parameter-Efficient Fine-Tuning: `pip install peft`
 * nvidia-ml-py (gpu debugging): `pip install nvidia-ml-py`
 
 To log into wandb, run `wandb login [api key]`
