@@ -63,24 +63,24 @@ BYOL:
   disable_cuda: False
   gpu_index: 0
   patience: 20
-  DINO:
-    dataset_name: oct  # [stl10, cifar10, cifar100]
-    dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
-    dataset_path_linux: /data/Boudreault
-    dataset_path_hpc: /usertemp/mts/cab8351
-    img_channel: 1
-    sample_within_image: -1
-    img_reshape: 480 # 480, 224 for ViT
-    dataset_sample: 1 # 0.25  # Sample of the entire dataset
-    arch: vits # convnextt, vits
-    use_lora: True
-    num_workers: 0
-    max_epochs: 100 # 60
-    batch_size: 8 # 128
-    lr: 0.0001
-    disable_cuda: False
-    gpu_index: 0
-    patience: 5 # 20
+DINO:
+  dataset_name: oct  # [stl10, cifar10, cifar100]
+  dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  dataset_path_linux: /data/Boudreault
+  dataset_path_hpc: /usertemp/mts/cab8351
+  img_channel: 1
+  sample_within_image: -1
+  img_reshape: 480 # 480, 224 for ViT
+  dataset_sample: 1 # 0.25  # Sample of the entire dataset
+  arch: vits # convnextt, vits
+  use_lora: True
+  num_workers: 0
+  max_epochs: 100 # 60
+  batch_size: 8 # 128
+  lr: 0.0001
+  disable_cuda: False
+  gpu_index: 0
+  patience: 5 # 20
 finetune:
   dataset_name: oct_clinical  # [stl10, cifar10, cifar100]
   dataset_path_windows: X:\Boudreault # C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
