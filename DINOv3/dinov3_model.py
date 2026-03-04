@@ -41,11 +41,23 @@ class DINO_LoRA(torch.nn.Module):
         if self.ch_in == 1:
             self.dino_model = utils.update_backbone_channel(self.dino_model, self.ch_in)
 
+        # Freeze dino weights
+        print("Freezing DINO weights...")
+        for i, param in enumerate(self.dino_model.parameters()):
+            param.requires_grad = False
+
+        trainable_params = sum(
+            p.numel() for p in self.dino_model.parameters() if p.requires_grad
+        )
+        total_params = sum(p.numel() for p in self.dino_model.parameters())
+        print(f"Total trainable params: {trainable_params:,} / {total_params:,}")
+
         # Add lora adapter
         if self.use_lora:
             self.add_lora()
 
         # Add linear layer
+        print("Adding linear layer...")
         self.add_linear_layer()
         self.dino_model.to(args.device)
 
@@ -108,8 +120,12 @@ class DINO_LoRA(torch.nn.Module):
             dim_mlp = self.dino_model.model.head.in_features
             self.dino_model.model.head.fc = nn.Linear(dim_mlp, num_classes)
         elif 'Eva' in self.arch:  # DINOv3 ViT
-            dim_mlp = self.dino_model.model.blocks[-1].mlp.fc2.out_features
-            self.dino_model.model.head = nn.Linear(dim_mlp, num_classes)
+            if self.use_lora:
+                dim_mlp = self.dino_model.model.blocks[-1].mlp.fc2.out_features
+                self.dino_model.model.head = nn.Linear(dim_mlp, num_classes)
+            else:
+                dim_mlp = self.dino_model.blocks[-1].mlp.fc2.out_features
+                self.dino_model.head = nn.Linear(dim_mlp, num_classes)
         # Load weights if file exists
         # if self.classifier_best_weights_path is not None and self.classifier_best_weights_path.exists():
         #     self.dino_model.model.head.load_state_dict(torch.load(self.classifier_best_weights_path, weights_only=True))
@@ -173,7 +189,10 @@ class DINO_LoRA(torch.nn.Module):
                 best_epoch = epoch
                 best_valid_loss = avg_epoch_valid_loss
                 # classifier_weights = self.dino_model.model.head.state_dict()
-                torch.save(self.dino_model.model.head.state_dict(), self.classifier_best_weights_path)
+                if self.use_lora:
+                    torch.save(self.dino_model.model.head.state_dict(), self.classifier_best_weights_path)
+                else:
+                    torch.save(self.dino_model.head.state_dict(), self.classifier_best_weights_path)
                 if self.use_lora:
                     lora_weights = self.dino_model.state_dict()
                     lora_weights = {n: w for n, w in lora_weights.items() if 'lora' in n}
@@ -182,8 +201,10 @@ class DINO_LoRA(torch.nn.Module):
     def test(self, test_loader):
         # Update model weights
         print(f'Loading best model weghts...')
-        self.dino_model.model.head.load_state_dict(torch.load(self.classifier_best_weights_path, map_location=self.device, weights_only=True))
         if self.use_lora:
+            # Load classifier weights
+            self.dino_model.model.head.load_state_dict(
+                torch.load(self.classifier_best_weights_path, map_location=self.device, weights_only=True))
             # Load original state dict
             model_weights = self.dino_model.state_dict()
             # Overwrite with saved weights
@@ -194,6 +215,10 @@ class DINO_LoRA(torch.nn.Module):
             # Load into model
             updated_weights = {l:w if w not in list(lora_weights.keys()) else lora_layers[l] for l, w in model_weights.items()}
             self.dino_model.load_state_dict(updated_weights, strict=False)
+        else:
+            # Load classifier weights
+            self.dino_model.head.load_state_dict(
+                torch.load(self.classifier_best_weights_path, map_location=self.device, weights_only=True))
         preds_all = []
         labels_all = []
         self.dino_model.eval()
