@@ -25,6 +25,7 @@ from BYOL.feature_model import get_backbone
 from BYOL.test_byol import get_oct_data_loaders, get_stl10_data_loaders
 
 from SimCLR.models.resnet_simclr import FeatureModelSimCLR
+from finetune_model import SupervisedModel
 
 # Import utils
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
@@ -60,124 +61,27 @@ parser.add_argument('--config_path',
                     help='Path to the config file',
                     type=str)
 
-class SupervisedModel(object):
-    def __init__(self, args, ckp_file):
-        self.ckp_file = ckp_file
+class FullSupervisedModel(SupervisedModel):
+    def __init__(self, args):
+        super().__init__(args, None)
         self.args = args
         # Define model
-        if self.args.approach == 'byol':
-            self.model, _ = get_backbone(args.arch, True)
-            # Change first layer to take grayscale image
-            if args.img_channel == 1:
-                self.model = utils.update_backbone_channel(self.model, args.img_channel)
-        elif self.args.approach == 'simclr':
-            # Set out_dim to 4 due to pre-training on 4 classes
-            self.model = FeatureModelSimCLR(arch=args.arch, out_dim=4, pretrained=False,
-                                            img_channel=args.img_channel)
-            # Skip changing the first layer, already done in FeatureModelSimCLR
+        self.model, _ = get_backbone(args.arch, True)
+        # Change first layer to take grayscale image
+        if args.img_channel == 1:
+            self.model = utils.update_backbone_channel(self.model, args.img_channel)
+
         self.save_folder = self.args.save_folder
-        self.finetune_best_weights_path = self.args.save_folder.joinpath(f'finetune_best_loss.pt')
+        self.finetune_best_weights_path = self.args.save_folder.joinpath(f'supervised_best_loss.pt')
         if self.finetune_best_weights_path.exists():
             self.finetune_best_weights = torch.load(self.finetune_best_weights_path, map_location=self.args.device)
         else:
             self.finetune_best_weights = None
 
-        # Load weights
-        if self.ckp_file is not None:
-            print(f"Loading weights from {self.ckp_file}...")
-            state_dict = torch.load(self.ckp_file, map_location=self.args.device)
-            if 'state_dict' in state_dict.keys():
-                state_dict = state_dict['state_dict']
-            self.model.load_state_dict(state_dict, strict=False)
-
         # Update classification head
         num_outputs = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
-        if self.args.approach == 'byol':
-            self.model = utils.set_classifier_head(self.model, num_outputs)
-        elif self.args.approach == 'simclr':
-            self.model = self.model.backbone
-            self.model = utils.set_classifier_head_SimCLR(self.model, num_outputs)
+        self.model = utils.set_classifier_head(self.model, num_outputs)
         self.model.to(args.device)
-
-    def finetune(self, train_loader, valid_loader, criterion, opt):
-        best_epoch = 0
-        best_valid_loss = 1e6
-        for epoch in range(self.args.epochs):
-            print(f"\n================================\n"
-                  f"Epoch {epoch}")
-            if (epoch - best_epoch) >= self.args.patience:
-                print(f'Loss has not improved for {self.args.patience} epochs. Training has stopped')
-                print(f'Best loss was {best_valid_loss} @ epoch {best_epoch}')
-                break
-            avg_epoch_train_loss = []
-            avg_epoch_valid_loss = []
-            self.model.train()
-            # with torch.autocast(device_type=f'cuda:{self.args.gpu_index}', dtype=torch.float16):
-            for images, labels in tqdm(train_loader, desc='Training'):
-                images = images.to(self.args.device)
-                labels = labels.to(self.args.device)
-                if len(labels.shape) == 1:
-                    labels = labels.unsqueeze(1)
-                opt.zero_grad()
-                preds = self.model(images)
-                batch_loss = criterion(preds, labels)
-                batch_loss.backward()
-                opt.step()
-                avg_epoch_train_loss.append(batch_loss)
-            avg_epoch_train_loss = float(torch.mean(torch.stack(avg_epoch_train_loss)).cpu().detach().numpy())
-            print(f"Average epoch train loss: {avg_epoch_train_loss}")
-
-            # Get validation loss
-            self.model.eval()
-            with torch.no_grad():
-                for images, labels in tqdm(valid_loader, desc='Validation'):
-                    images = images.to(self.args.device)
-                    labels = labels.to(self.args.device)
-                    preds = self.model(images)
-                    batch_loss = criterion(preds, labels)
-                    avg_epoch_valid_loss.append(batch_loss)
-                avg_epoch_valid_loss = float(torch.mean(torch.stack(avg_epoch_valid_loss)).cpu().detach().numpy())
-                print(f"Average epoch valid loss: {avg_epoch_valid_loss}")
-
-            if avg_epoch_valid_loss < best_valid_loss:
-                print(f'New best loss achieved @ epoch {epoch}: {avg_epoch_valid_loss}')
-                best_epoch = epoch
-                best_valid_loss = avg_epoch_valid_loss
-                self.finetune_best_weights = self.model.state_dict()
-                torch.save(self.model.state_dict(), self.finetune_best_weights_path)
-
-    def test(self, test_loader):
-        # Update model weights
-        print(f'Loading best model weghts...')
-        self.model.load_state_dict(self.finetune_best_weights, strict=False)
-        preds_all = []
-        labels_all = []
-        self.model.eval()
-        print(f'Getting test set predictions...')
-        with torch.no_grad():
-            for images, labels in tqdm(test_loader, desc='Testing'):
-                images = images.to(self.args.device)
-                pred = self.model(images)
-                preds_all.append(pred)
-                labels_all.append(labels)
-        preds_all = torch.concat(preds_all, dim=0).detach().to('cpu')
-        labels_all = torch.concat(labels_all, dim=0).detach().to('cpu')
-        return preds_all, labels_all
-
-
-def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):
-    train_dataset = datasets.STL10(root_path, split='train', download=download,
-                                   transform=transforms.ToTensor())
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size,
-                              num_workers=0, drop_last=False, shuffle=shuffle)
-
-    test_dataset = datasets.STL10(root_path, split='test', download=download,
-                                  transform=transforms.ToTensor())
-
-    test_loader = DataLoader(test_dataset, batch_size=batch_size,
-                             num_workers=0, drop_last=False, shuffle=shuffle)
-    return train_loader, test_loader
 
 
 def get_oct_data_loaders(root_path:pathlib.Path, args: argparse.Namespace, batch_size:int, shuffle=False):
@@ -298,18 +202,9 @@ def main():
     args.out_dim = num_cluster_dict[args.dataset_name]
     args.gpu_index = configs['finetune']['gpu_index']
     args.patience = configs['finetune']['patience']
-    if args.approach == 'byol':
-        approach_folder = 'BYOL'
-    elif args.approach == 'simclr':
-        approach_folder = 'SimCLR'
-    args.save_folder = pathlib.Path().resolve().joinpath(approach_folder).joinpath(f'weights_{args.arch}')
+    args.save_folder = pathlib.Path().resolve().joinpath('supervised').joinpath(f'weights_{args.arch}')
     if not args.save_folder.is_dir():
         args.save_folder.mkdir(parents=True)
-
-    if args.approach == 'byol':
-        chkpt_file = list(args.save_folder.glob('byol_best_loss*.pt'))[-1]
-    elif args.approach == 'simclr':
-        chkpt_file = list(args.save_folder.glob('checkpoint_best*.pt'))[-1]
 
     # Set all random seeds
     print("Setting random seed...")
@@ -333,10 +228,10 @@ def main():
                                                            download=False)
 
     # Define model
-    model = SupervisedModel(args, chkpt_file)
+    model = FullSupervisedModel(args)
 
-    # Finetune weights
-    print(f"Finetune model")
+    # Train weights
+    print(f"Train model")
     criterion = nn.BCEWithLogitsLoss()
     opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr)
     model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt)

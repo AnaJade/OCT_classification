@@ -79,8 +79,8 @@ class OCTDataset(Dataset): # Used in train_moco
         if len(missing_labels) > 0:
             print(f"{missing_labels} not found in mapping dataset")
         if len(extra_labels) > 0:
-            print(f"{extra_labels} found in mapping dataset but not in label dict")
-            print(f"Removing labels...")
+            print(f"{extra_labels} label found in mapping dataset but not in label dict")
+            print(f"Removing images...")
             self.map_df = self.map_df.dropna(axis=0)
 
         self.map_df['area'] = [re.sub('|'.join(f'{f}_' for f in self.label_dict.values()), '', p.parts[1]) for p in self.map_df['img_relative_path']]
