@@ -203,7 +203,11 @@ def main():
     args.out_dim = num_cluster_dict[args.dataset_name]
     args.gpu_index = configs['finetune']['gpu_index']
     args.patience = configs['finetune']['patience']
-    args.save_folder = pathlib.Path().resolve().joinpath('supervised').joinpath(f'weights_{args.arch}')
+    if (platform == "linux" or platform == "linux2") and ('hpc' in socket.gethostname() or 'u00' in socket.gethostname()):
+        print(f"socket name: {socket.gethostname()}")
+        args.save_folder = pathlib.Path(r'/fibus/fs0/14/cab8351/OCT_classification/DINO').joinpath(f'weights_{args.arch}')
+    else:
+        args.save_folder = pathlib.Path().resolve().joinpath('supervised').joinpath(f'weights_{args.arch}')
     if not args.save_folder.is_dir():
         args.save_folder.mkdir(parents=True)
     print(f"Saving weights to: {args.save_folder}")
