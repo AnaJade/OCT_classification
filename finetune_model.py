@@ -305,6 +305,7 @@ def main():
     args.save_folder = pathlib.Path().resolve().joinpath(approach_folder).joinpath(f'weights_{args.arch}')
     if not args.save_folder.is_dir():
         args.save_folder.mkdir(parents=True)
+    print(f"Saving weights to: {args.save_folder}")
 
     if args.approach == 'byol':
         chkpt_file = list(args.save_folder.glob('byol_best_loss*.pt'))[-1]

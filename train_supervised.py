@@ -206,6 +206,7 @@ def main():
     args.save_folder = pathlib.Path().resolve().joinpath('supervised').joinpath(f'weights_{args.arch}')
     if not args.save_folder.is_dir():
         args.save_folder.mkdir(parents=True)
+    print(f"Saving weights to: {args.save_folder}")
 
     # Set all random seeds
     print("Setting random seed...")
