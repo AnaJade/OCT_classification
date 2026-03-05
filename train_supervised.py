@@ -3,6 +3,7 @@ import pathlib
 import random
 import sys
 from argparse import Namespace
+import socket
 from sys import platform
 import torch
 import torch.backends.cudnn as cudnn
@@ -12,19 +13,15 @@ from torchvision import models
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from sklearn.linear_model import LogisticRegression
-from sklearn import preprocessing
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from torchvision import datasets
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import precision_score, recall_score, adjusted_rand_score, normalized_mutual_info_score, classification_report
+from sklearn.metrics import classification_report
 
 from BYOL.feature_model import get_backbone
 from BYOL.test_byol import get_oct_data_loaders, get_stl10_data_loaders
 
-from SimCLR.models.resnet_simclr import FeatureModelSimCLR
 from finetune_model import SupervisedModel
 
 # Import utils
@@ -142,7 +139,11 @@ def main():
 
     configs = utils.load_configs(config_file)
     if platform == "linux" or platform == "linux2":
-        dataset_path = pathlib.Path(configs['finetune']['dataset_path_linux'])
+        print(f"socket name: {socket.gethostname()}")
+        if 'hpc' in socket.gethostname() or 'u00' in socket.gethostname():
+            dataset_path = pathlib.Path(configs['finetune']['dataset_path_hpc'])
+        else:
+            dataset_path = pathlib.Path(configs['finetune']['dataset_path_linux'])
     elif platform == "win32":
         dataset_path = pathlib.Path(configs['finetune']['dataset_path_windows'])
     labels = configs['data']['labels']

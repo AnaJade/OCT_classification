@@ -2,6 +2,7 @@ import copy
 import pathlib
 import warnings
 import platform
+import socket
 from random import randint
 import re
 import h5py
@@ -11,7 +12,10 @@ import matplotlib
 from tqdm import tqdm
 from typing import Union
 
-matplotlib.use("TkAgg")
+if (platform == "linux" or platform == "linux2") and ('hpc' in socket.gethostname() or 'u00' in socket.gethostname()):
+    matplotlib.use('Agg')
+else:
+    matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
