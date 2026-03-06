@@ -2,6 +2,8 @@ import argparse
 import pathlib
 import random
 import sys
+from sys import platform
+import socket
 from argparse import Namespace
 from sys import platform
 import torch
@@ -302,7 +304,11 @@ def main():
         approach_folder = 'BYOL'
     elif args.approach == 'simclr':
         approach_folder = 'SimCLR'
-    args.save_folder = pathlib.Path().resolve().joinpath(approach_folder).joinpath(f'weights_{args.arch}')
+    if (platform == "linux" or platform == "linux2") and ('hpc' in socket.gethostname() or 'u00' in socket.gethostname()):
+        print(f"socket name: {socket.gethostname()}")
+        args.save_folder = pathlib.Path(r'/fibus/fs0/14/cab8351/OCT_classification').joinpath(approach_folder).joinpath(f'weights_{args.arch}')
+    else:
+        args.save_folder = pathlib.Path().resolve().joinpath(approach_folder).joinpath(f'weights_{args.arch}')
     if not args.save_folder.is_dir():
         args.save_folder.mkdir(parents=True)
     print(f"Saving weights to: {args.save_folder}")
