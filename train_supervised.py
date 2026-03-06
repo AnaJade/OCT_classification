@@ -205,7 +205,7 @@ def main():
     args.patience = configs['finetune']['patience']
     if (platform == "linux" or platform == "linux2") and ('hpc' in socket.gethostname() or 'u00' in socket.gethostname()):
         print(f"socket name: {socket.gethostname()}")
-        args.save_folder = pathlib.Path(r'/fibus/fs0/14/cab8351/OCT_classification/DINO').joinpath(f'weights_{args.arch}')
+        args.save_folder = pathlib.Path(r'/fibus/fs0/14/cab8351/OCT_classification/supervised').joinpath(f'weights_{args.arch}')
     else:
         args.save_folder = pathlib.Path().resolve().joinpath('supervised').joinpath(f'weights_{args.arch}')
     if not args.save_folder.is_dir():

@@ -8,6 +8,7 @@ BYOL/weights*
 BYOL/*.pth
 BYOL/__pycache__
 BYOL/wandb
+BYOL/finetune_BYOL.py
 DINOv3/weights*
 DINOv3/__pycache__
 DINOv3/wandb

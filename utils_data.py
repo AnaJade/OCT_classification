@@ -3,6 +3,7 @@ import pathlib
 import warnings
 import platform
 import socket
+from sys import platform
 from random import randint
 import re
 import h5py
@@ -115,6 +116,10 @@ class OCTDataset(Dataset): # Used in train_moco
             self.map_df = self.map_df.groupby(['label_str', 'area', 'traj']).sample(frac=self.pre_sample)
             self.map_df = self.map_df.drop(columns=['area', 'traj'])
             self.map_df = self.map_df.reset_index(drop=True)
+        elif self.pre_sample == 2:
+            # Remove images from sin traj
+            map_df = self.map_df.copy()
+            self.map_df = self.map_df[~self.map_df['trajectory'].str.contains('sin')].copy()
 
         if self.use_iipp and self.num_same_area < 1:
             # Make the number of imgs per area even
