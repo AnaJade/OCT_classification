@@ -80,7 +80,7 @@ DINO:
   lr: 0.0001
   disable_cuda: False
   gpu_index: 0
-  patience: 5 # 20
+  patience: 10 # 20
 finetune:
   dataset_name: oct_clinical  # [stl10, cifar10, cifar100]
   dataset_path_windows: X:\Boudreault # C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit

@@ -73,7 +73,11 @@ class DINO_LoRA(torch.nn.Module):
     def load_model(self):
         # Documentation: https://huggingface.co/collections/timm/timm-dinov3
         weight_dict = {'convnextt': 'convnext_tiny.dinov3_lvd1689m',
-                       'vits': 'vit_small_patch16_dinov3_qkvb.lvd1689m'}
+                       'vits': 'vit_small_patch16_dinov3_qkvb.lvd1689m',
+                       'vitb': 'vit_base_patch16_dinov3_qkvb.lvd1689m',
+                       'vitl': 'vit_large_patch16_dinov3_qkvb.lvd1689m',
+                       'vith': 'vit_huge_patch16_dinov3_qkvb.lvd1689m',
+                       'vit7b': 'vit_7b_patch16_dinov3_qkvb.lvd1689m'}
         num_classes = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
         self.dino_model = timm.create_model(weight_dict[self.arch],
                                             pretrained=True,
