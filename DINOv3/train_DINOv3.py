@@ -16,16 +16,9 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from torchvision import models
-from torchvision.datasets import STL10
 from sklearn.metrics import classification_report
 
-from DINOv3.dinov3_model import DINO_LoRA
-
-# DEBUG
-from transformers import VisionEncoderDecoderModel
-from peft import LoraConfig, get_peft_model, TaskType
-from transformers import LlamaTokenizer, LlamaForCausalLM
+from dinov3_model import DINO_LoRA
 
 # Import utils
 parent_dir = pathlib.Path(__file__).resolve().parent.parent

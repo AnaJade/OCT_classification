@@ -118,7 +118,7 @@ class OCTDataset(Dataset): # Used in train_moco
             self.map_df = self.map_df.reset_index(drop=True)
         elif self.pre_sample == 2:
             # Remove images from sin traj
-            map_df = self.map_df.copy()
+            print(f"Removing images from sin trajectory...")
             self.map_df = self.map_df[~self.map_df['trajectory'].str.contains('sin')].copy()
 
         if self.use_iipp and self.num_same_area < 1:

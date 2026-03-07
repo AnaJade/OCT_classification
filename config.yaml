@@ -35,7 +35,7 @@ SimCLR:
   use_pretrained: True
   num_workers: 0
   max_epochs: 200
-  batch_size: 16 # 256 # Must be a multiple of num_same_area if iipp is used
+  batch_size: 128 # 256 # Must be a multiple of num_same_area if iipp is used
   lr: 0.0003
   weight_decay: 0.0001
   disable_cuda: False
@@ -76,7 +76,7 @@ DINO:
   use_lora: True
   num_workers: 0
   max_epochs: 100 # 60
-  batch_size: 8 # 128
+  batch_size: 128
   lr: 0.0001
   disable_cuda: False
   gpu_index: 0
@@ -90,12 +90,12 @@ finetune:
   sample_within_image: -1
   img_reshape: 480 # 480, 224 for ViT
   use_iipp: True
-  dataset_sample: 1 # 0.25  # Sample of the entire dataset
+  dataset_sample: 1 # 0.25  # Sample of the entire dataset, 2 to remove sin traj
   approach: byol # simclr, byol
   arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
   num_workers: 0
   max_epochs: 10 # 500
-  batch_size: 16
+  batch_size: 128
   lr: 0.00005
   disable_cuda: False
   gpu_index: 0
