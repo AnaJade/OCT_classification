@@ -28,10 +28,20 @@ class DINO_LoRA(torch.nn.Module):
         # Define other variables
         self.arch = args.arch
         self.device = args.device
+        self.dataset_name = self.args.dataset_name
         self.use_lora = args.use_lora
         self.ch_in = args.img_channel
         self.save_folder = args.save_folder
         self.dino_model = None
+
+        # Define classifier weights path
+        if self.classifier_best_weights_path is None:
+            self.classifier_best_weights_path = self.args.save_folder.joinpath(
+                f'{self.dataset_name}_classifier_best_loss.pt')
+
+        # Define lora weights path
+        if self.lora_best_weights_path is None:
+            self.lora_best_weights_path = self.args.save_folder.joinpath(f'{self.dataset_name}_lora_best_loss.pt')
 
         # Load dino model minus classification layer
         self.load_model()
@@ -60,14 +70,6 @@ class DINO_LoRA(torch.nn.Module):
         print("Adding linear layer...")
         self.add_linear_layer()
         self.dino_model.to(args.device)
-
-        # Define classifier weights path
-        if self.classifier_best_weights_path is None:
-            self.classifier_best_weights_path = self.args.save_folder.joinpath(f'{self.args.dataset_name}_classifier_best_loss.pt')
-
-        # Define lora weights path
-        if self.lora_best_weights_path is None:
-            self.lora_best_weights_path = self.args.save_folder.joinpath(f'{self.args.dataset_name}_lora_best_loss.pt')
 
 
     def load_model(self):
@@ -111,6 +113,12 @@ class DINO_LoRA(torch.nn.Module):
         )
         self.dino_model = LoraModel(self.dino_model, lora_config, "lora")
 
+        if self.dataset_name == 'oct_clinical':
+            oct_lora_weights = self.args.save_folder.joinpath(f'oct_lora_best_loss.pt')
+            # Load 'oct' lora weights
+            print(f"Loading LoRA pre-trained weights from {'/'.join(oct_lora_weights.parts[-3:])}")
+            self.load_lora_weights(oct_lora_weights)
+
         trainable_params = sum(
             p.numel() for p in self.dino_model.parameters() if p.requires_grad
         )
@@ -139,6 +147,20 @@ class DINO_LoRA(torch.nn.Module):
         )
         total_params = sum(p.numel() for p in self.dino_model.parameters())
         print(f"Total trainable params: {trainable_params:,} / {total_params:,}")
+
+    def load_lora_weights(self, lora_weights_path=None):
+        if lora_weights_path is None:
+            lora_weights_path = self.lora_best_weights_path
+        # Load original state dict
+        model_weights = self.dino_model.state_dict()
+        # Load saved lora_weights
+        lora_weights = torch.load(lora_weights_path, map_location=self.device, weights_only=True)
+        lora_layers = list(lora_weights.keys())
+        # print([model_weights[l].equal(lora_weights[l]) for l in lora_layers])
+        # Overwrite model weights with saved weights
+        updated_weights = {l: w if w not in list(lora_weights.keys()) else lora_layers[l] for l, w in
+                           model_weights.items()}
+        self.dino_model.load_state_dict(updated_weights, strict=False)
 
     def train(self, train_loader, valid_loader, criterion, opt, wandb_log=False, project_name=None):
         if wandb_log:
@@ -209,6 +231,8 @@ class DINO_LoRA(torch.nn.Module):
             # Load classifier weights
             self.dino_model.model.head.load_state_dict(
                 torch.load(self.classifier_best_weights_path, map_location=self.device, weights_only=True))
+            self.load_lora_weights()
+            """
             # Load original state dict
             model_weights = self.dino_model.state_dict()
             # Overwrite with saved weights
@@ -219,6 +243,7 @@ class DINO_LoRA(torch.nn.Module):
             # Load into model
             updated_weights = {l:w if w not in list(lora_weights.keys()) else lora_layers[l] for l, w in model_weights.items()}
             self.dino_model.load_state_dict(updated_weights, strict=False)
+            """
         else:
             # Load classifier weights
             self.dino_model.head.load_state_dict(
