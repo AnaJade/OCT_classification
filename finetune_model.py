@@ -344,7 +344,13 @@ def main():
 
     # Finetune weights
     print(f"Finetune model")
-    criterion = nn.BCEWithLogitsLoss()
+    pos_weights = None
+    if args.dataset_name == 'oct_clinical':
+        # Define pos_weights
+        class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
+        pos_weights = torch.Tensor([class_counts.loc[1.0, 'img_count'] / class_counts.loc[0.0, 'img_count'],
+                                    class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']])
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
     opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr)
     model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt)
 
@@ -361,6 +367,7 @@ def main():
         test_labels = test_oh_labels
 
     # Calculate metrics
+    print(f"Test set results using {args.arch} backbone:")
     report = classification_report(test_labels, test_preds, target_names=labels)
     print(report)
 
