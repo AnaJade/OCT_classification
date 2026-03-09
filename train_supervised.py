@@ -28,7 +28,7 @@ from finetune_model import SupervisedModel
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import OCTDataset, build_image_root
+from utils_data import get_oct_data_loaders, build_image_root
 
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
@@ -79,52 +79,6 @@ class FullSupervisedModel(SupervisedModel):
         num_outputs = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
         self.model = utils.set_classifier_head(self.model, num_outputs)
         self.model.to(args.device)
-
-
-def get_oct_data_loaders(root_path:pathlib.Path, args: argparse.Namespace, batch_size:int, shuffle=False):
-    img_transforms = [transforms.ToTensor(),
-                      transforms.Resize((args.img_reshape, args.img_reshape)),
-                      transforms.Normalize(mean=mean[args.dataset_name],
-                                           std=std[args.dataset_name])]
-    if args.img_channel == 1:
-        img_transforms.append(transforms.Grayscale())
-    img_transforms = transforms.Compose(img_transforms)
-    train_dataset = OCTDataset(root_path, 'train',
-                               args.map_df_paths, args.labels_dict,
-                               ch_in=args.img_channel,
-                               sample_within_image=args.sample_within_image,
-                               use_iipp=False, # args.use_iipp,
-                               num_same_area=-1,
-                               transforms=img_transforms,
-                               pre_sample=args.dataset_sample)
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size,
-                              num_workers=0, drop_last=False, shuffle=shuffle)
-
-    valid_dataset = OCTDataset(root_path, 'valid',
-                               args.map_df_paths, args.labels_dict,
-                               ch_in=args.img_channel,
-                               sample_within_image=args.sample_within_image,
-                               use_iipp=False,  # args.use_iipp,
-                               num_same_area=-1,
-                               transforms=img_transforms,
-                               pre_sample=args.dataset_sample)
-
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size,
-                              num_workers=0, drop_last=False, shuffle=shuffle)
-
-    test_dataset = OCTDataset(root_path, 'test',
-                              args.map_df_paths, args.labels_dict,
-                              ch_in=args.img_channel,
-                              sample_within_image=args.sample_within_image,
-                              use_iipp=False,
-                              num_same_area=-1,
-                              transforms=img_transforms,
-                              pre_sample=args.dataset_sample)
-
-    test_loader = DataLoader(test_dataset, batch_size=batch_size,
-                             num_workers=0, drop_last=False, shuffle=shuffle)
-    return train_loader, valid_loader, test_loader
 
 
 def main():
@@ -228,6 +182,8 @@ def main():
     # Create train and test sets
     if 'oct' in args.dataset_name:
         train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
+                                                                       mean=mean[args.dataset_name],
+                                                                       std=std[args.dataset_name],
                                                                        shuffle=False)
     else:
         train_loader, test_loader = get_stl10_data_loaders(args.data, args.batch_size, shuffle=False,

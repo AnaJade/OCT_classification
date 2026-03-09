@@ -1,4 +1,5 @@
 import copy
+import argparse
 import pathlib
 import warnings
 import platform
@@ -55,6 +56,12 @@ class OCTDataset(Dataset): # Used in train_moco
         :param pre_shuffle: Whether to shuffle the images once at the beginning
         :param pre_sample: Ratio of images to be kept
         """
+        # Check if re-splitting is needed (in case split in ['test_train', 'test_valid', 'test_test'])
+        if ('test' in split) and ('_' in split):
+            subset = split.split('_')[1]
+            split = 'test'
+        else:
+            subset = None
         self.root = root
         self.transforms = transforms
         self.map_df = map_df_paths[split]
@@ -67,7 +74,7 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df = pd.read_csv(self.map_df)
         self.pre_shuffle = pre_shuffle
         self.pre_sample = pre_sample
-        self.map_df_sampling = None # used for iipp when num_same_area >= 2
+        self.map_df_sampling = None # set for iipp when num_same_area >= 2
         self.show = False # For debug purposes
 
         # Update relative path to image paths
@@ -95,6 +102,15 @@ class OCTDataset(Dataset): # Used in train_moco
         # Remove images that don't have ascan_per_group ascans in them
         # Not needed with new method of generating images
         # self.map_df = self.map_df.loc[self.map_df['idx_end'] - self.map_df['idx_start'] == ascan_per_group]
+
+        # Assign new subset if needed
+        if subset is not None:
+            # Assign subset with [0.6, 0.2, 0.2] split
+            self.map_df.loc[:, 'subset'] = ''
+            self.map_df.loc[self.map_df.index % 5 <= 2, 'subset'] = 'test_train'
+            self.map_df.loc[self.map_df.index % 5 == 3, 'subset'] = 'test_valid'
+            self.map_df.loc[self.map_df.index % 5 == 4, 'subset'] = 'test_test'
+            self.map_df = self.map_df[self.map_df['subset'] == f'test_{subset}'].copy()
 
         if (self.sample_within_image > 1) and (self.sample_within_image < ascan_per_group):
             self.map_df.loc[:, 'img_idx_start'] = self.map_df.loc[:, 'idx_start']
@@ -250,15 +266,54 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df_sampling.loc[:, 'weights'] = 1
 
 
-class OCTClinicalDataset(OCTDataset):
-    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, ch_in=3, sample_within_image=-1, use_iipp=False, num_same_area=-1, transforms=None, preload_data=False, pre_shuffle=True, pre_sample=1):
-        super.__init__(self, root, split, map_df_paths, labels_dict, ch_in, sample_within_image, False, -1, transforms, False, False, pre_sample)
-        pass
+def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, shuffle=False):
+    img_transforms = [transforms.ToTensor(),
+                      transforms.Resize((args.img_reshape, args.img_reshape)),
+                      transforms.Normalize(mean=mean,
+                                           std=std)]
+    if args.img_channel == 1:
+        img_transforms.append(transforms.Grayscale())
+    img_transforms = transforms.Compose(img_transforms)
+    split_names = ['train', 'valid', 'test']
+    if args.dataset_name == 'oct':
+        split_names = [f'test_{s}' for s in split_names]
+    train_dataset = OCTDataset(root_path, split_names[0],
+                               args.map_df_paths, args.labels_dict,
+                               ch_in=args.img_channel,
+                               sample_within_image=args.sample_within_image,
+                               use_iipp=False, # args.use_iipp,
+                               num_same_area=-1,
+                               transforms=img_transforms,
+                               pre_sample=args.dataset_sample)
 
-        # TODO: Update label in map_df based on labeling scheme
+    train_loader = DataLoader(train_dataset, batch_size=batch_size,
+                              num_workers=0, drop_last=False, shuffle=shuffle)
 
-    def __getitem__(self, idx):
-        pass
+    valid_dataset = OCTDataset(root_path, split_names[1],
+                               args.map_df_paths, args.labels_dict,
+                               ch_in=args.img_channel,
+                               sample_within_image=args.sample_within_image,
+                               use_iipp=False,  # args.use_iipp,
+                               num_same_area=-1,
+                               transforms=img_transforms,
+                               pre_sample=args.dataset_sample)
+
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size,
+                              num_workers=0, drop_last=False, shuffle=shuffle)
+
+    test_dataset = OCTDataset(root_path, split_names[2],
+                              args.map_df_paths, args.labels_dict,
+                              ch_in=args.img_channel,
+                              sample_within_image=args.sample_within_image,
+                              use_iipp=False,
+                              num_same_area=-1,
+                              transforms=img_transforms,
+                              pre_sample=args.dataset_sample)
+
+    test_loader = DataLoader(test_dataset, batch_size=batch_size,
+                             num_workers=0, drop_last=False, shuffle=shuffle)
+    return train_loader, valid_loader, test_loader
+
 
 def open_mat_file(file: pathlib.Path):
     with open(file, 'rb') as f:

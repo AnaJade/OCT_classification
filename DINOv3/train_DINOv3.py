@@ -24,8 +24,7 @@ from dinov3_model import DINO_LoRA
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import OCTDataset, build_image_root
-from finetune_model import get_oct_data_loaders, get_stl10_data_loaders
+from utils_data import get_oct_data_loaders, build_image_root
 
 
 # Set up the argument parser
@@ -182,48 +181,10 @@ if __name__ == "__main__":
         args.gpu_index = -1
 
     # Create train, valid and test sets
-    img_transforms = [transforms.ToTensor(),
-                      transforms.Resize((args.img_reshape, args.img_reshape)),
-                      transforms.Normalize(mean=mean[args.dataset_name],
-                                           std=std[args.dataset_name])]
-    if args.img_channel == 1:
-        img_transforms.append(transforms.Grayscale())
-    img_transforms = transforms.Compose(img_transforms)
-    train_dataset = OCTDataset(args.data, 'train',
-                               args.map_df_paths, args.labels_dict,
-                               ch_in=args.img_channel,
-                               sample_within_image=args.sample_within_image,
-                               use_iipp=False,  # args.use_iipp,
-                               num_same_area=-1,
-                               transforms=img_transforms,
-                               pre_sample=args.dataset_sample)
-
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
-                              num_workers=0, drop_last=False, shuffle=True)
-
-    valid_dataset = OCTDataset(args.data, 'valid',
-                               args.map_df_paths, args.labels_dict,
-                               ch_in=args.img_channel,
-                               sample_within_image=args.sample_within_image,
-                               use_iipp=False,  # args.use_iipp,
-                               num_same_area=-1,
-                               transforms=img_transforms,
-                               pre_sample=args.dataset_sample)
-
-    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size,
-                              num_workers=0, drop_last=False, shuffle=False)
-
-    test_dataset = OCTDataset(args.data, 'test',
-                              args.map_df_paths, args.labels_dict,
-                              ch_in=args.img_channel,
-                              sample_within_image=args.sample_within_image,
-                              use_iipp=False,
-                              num_same_area=-1,
-                              transforms=img_transforms,
-                              pre_sample=args.dataset_sample)
-
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size,
-                             num_workers=0, drop_last=False, shuffle=False)
+    train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
+                                                                   mean=mean[args.dataset_name],
+                                                                   std=std[args.dataset_name],
+                                                                   shuffle=False)
 
 with torch.cuda.device(args.gpu_index):
         # feature_model, feature_layer = get_backbone(args.arch, args.use_pretrained)
