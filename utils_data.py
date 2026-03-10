@@ -56,12 +56,10 @@ class OCTDataset(Dataset): # Used in train_moco
         :param pre_shuffle: Whether to shuffle the images once at the beginning
         :param pre_sample: Ratio of images to be kept
         """
-        # Check if re-splitting is needed (in case split in ['test_train', 'test_valid', 'test_test'])
-        if ('test' in split) and ('_' in split):
-            subset = split.split('_')[1]
-            split = 'test'
-        else:
-            subset = None
+        # Check if re-splitting is needed (in case split in ['train_supervised', 'valid_supervised', 'test_supervised'])
+        supervised = 'supervised' in split
+        if ('supervised' in split) and ('_' in split):
+            split = split.split('_')[0]
         self.root = root
         self.transforms = transforms
         self.map_df = map_df_paths[split]
@@ -104,13 +102,23 @@ class OCTDataset(Dataset): # Used in train_moco
         # self.map_df = self.map_df.loc[self.map_df['idx_end'] - self.map_df['idx_start'] == ascan_per_group]
 
         # Assign new subset if needed
-        if subset is not None:
+        self.map_df.loc[:, 'subset_id'] = self.map_df.groupby(['area_id', 'trajectory']).cumcount()
+        self.map_df.loc[:, 'subset'] = ''
+        # Reserve 10% of data for supervised training
+        self.map_df.loc[self.map_df['subset_id'] % 10 == 9, 'subset'] = f'{split}_supervised'
+        self.map_df.loc[self.map_df['subset'] != f'{split}_supervised', 'subset'] = split
+        self.map_df = self.map_df.drop(columns=['subset_id'])
+        print(f"{round((len(self.map_df[self.map_df['subset'].str.contains('supervised')])/len(self.map_df[~self.map_df['subset'].str.contains('supervised')]))*100, 2)}% ({len(self.map_df[self.map_df['subset'].str.contains('supervised')])}/{len(self.map_df[~self.map_df['subset'].str.contains('supervised')])}) of images in the {split} set are reserved for supervised learning.")
+        if supervised: # subset is not None:
             # Assign subset with [0.6, 0.2, 0.2] split
-            self.map_df.loc[:, 'subset'] = ''
-            self.map_df.loc[self.map_df.index % 5 <= 2, 'subset'] = 'test_train'
-            self.map_df.loc[self.map_df.index % 5 == 3, 'subset'] = 'test_valid'
-            self.map_df.loc[self.map_df.index % 5 == 4, 'subset'] = 'test_test'
-            self.map_df = self.map_df[self.map_df['subset'] == f'test_{subset}'].copy()
+            # self.map_df.loc[:, 'subset'] = ''
+            # self.map_df.loc[self.map_df.index % 5 <= 2, 'subset'] = 'test_train'
+            # self.map_df.loc[self.map_df.index % 5 == 3, 'subset'] = 'test_valid'
+            # self.map_df.loc[self.map_df.index % 5 == 4, 'subset'] = 'test_test'
+            # self.map_df = self.map_df[self.map_df['subset'] == f'test_{subset}'].copy()
+            self.map_df = self.map_df[self.map_df['subset'] == f'{split}_supervised'].copy()
+        else:
+            self.map_df = self.map_df[self.map_df['subset'] == f'{split}'].copy()
 
         if (self.sample_within_image > 1) and (self.sample_within_image < ascan_per_group):
             self.map_df.loc[:, 'img_idx_start'] = self.map_df.loc[:, 'idx_start']
@@ -266,7 +274,7 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df_sampling.loc[:, 'weights'] = 1
 
 
-def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, shuffle=False):
+def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, shuffle=False):
     img_transforms = [transforms.ToTensor(),
                       transforms.Resize((args.img_reshape, args.img_reshape)),
                       transforms.Normalize(mean=mean,
@@ -276,7 +284,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
     img_transforms = transforms.Compose(img_transforms)
     split_names = ['train', 'valid', 'test']
     if args.dataset_name == 'oct':
-        split_names = [f'test_{s}' for s in split_names]
+        split_names = [f'{s}_supervised' for s in split_names]
     train_dataset = OCTDataset(root_path, split_names[0],
                                args.map_df_paths, args.labels_dict,
                                ch_in=args.img_channel,

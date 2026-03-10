@@ -28,7 +28,7 @@ from finetune_model import SupervisedModel
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_oct_data_loaders, build_image_root
+from utils_data import get_supervised_oct_data_loaders, build_image_root
 
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
@@ -181,7 +181,7 @@ def main():
 
     # Create train and test sets
     if 'oct' in args.dataset_name:
-        train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
+        train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
                                                                        mean=mean[args.dataset_name],
                                                                        std=std[args.dataset_name],
                                                                        shuffle=False)

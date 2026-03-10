@@ -24,7 +24,7 @@ from dinov3_model import DINO_LoRA
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_oct_data_loaders, build_image_root
+from utils_data import get_supervised_oct_data_loaders, build_image_root
 
 
 # Set up the argument parser
@@ -181,7 +181,7 @@ if __name__ == "__main__":
         args.gpu_index = -1
 
     # Create train, valid and test sets
-    train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
+    train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
                                                                    mean=mean[args.dataset_name],
                                                                    std=std[args.dataset_name],
                                                                    shuffle=False)
