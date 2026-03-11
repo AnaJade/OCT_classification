@@ -86,7 +86,7 @@ class FeatureExtractor(object):
     def _inference(self, loader):
         feature_vector = []
         labels_vector = []
-        for batch_x, batch_y in loader:
+        for batch_x, batch_y in tqdm(loader, desc='Extracting features:'):
             batch_x = batch_x.to(self.args.device)
             labels_vector.extend(batch_y)
 
@@ -266,7 +266,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:Namespace, batch_size:int,
     if args.img_channel == 1:
         img_transforms.append(transforms.Grayscale())
     img_transforms = transforms.Compose(img_transforms)
-    train_dataset = OCTDataset(root_path, 'train',
+    train_dataset = OCTDataset(root_path, 'train_supervised',
                                args.map_df_paths, args.labels_dict,
                                ch_in=args.img_channel,
                                sample_within_image=args.sample_within_image,

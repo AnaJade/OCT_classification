@@ -13,6 +13,7 @@ DINOv3/weights*
 DINOv3/__pycache__
 DINOv3/wandb
 supervised
+supervised_lab_baseline
 supervised_4classes
 supervised_3clases
 supervised_noSin
