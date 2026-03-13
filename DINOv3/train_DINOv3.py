@@ -9,6 +9,7 @@ import socket
 import timm
 from addict import Dict
 from tqdm import tqdm
+import numpy as np
 
 import torch
 from torch import nn
@@ -259,6 +260,6 @@ with torch.cuda.device(args.gpu_index):
 
         # Calculate metrics
         print(f"Test set results using {args.arch} backbone:")
-        report = classification_report(test_labels, test_preds, target_names=labels)
+        report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
         print(report)
 

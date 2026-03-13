@@ -33,6 +33,7 @@ from torch.utils.data import Dataset, DataLoader
 # Disable warning for using transforms.v2
 torchvision.disable_beta_transforms_warning()
 from torchvision.io import read_image
+from torchvision import datasets
 from torchvision import transforms
 from torchvision.transforms import v2
 
@@ -62,6 +63,7 @@ class OCTDataset(Dataset): # Used in train_moco
             split = split.split('_')[0]
         self.root = root
         self.transforms = transforms
+        self.split = split
         self.map_df = map_df_paths[split]
         self.map_df_sampling = None
         self.label_dict = labels_dict
@@ -274,7 +276,7 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df_sampling.loc[:, 'weights'] = 1
 
 
-def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, shuffle=False):
+def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, supervised=False, shuffle=False):
     img_transforms = [transforms.ToTensor(),
                       transforms.Resize((args.img_reshape, args.img_reshape)),
                       transforms.Normalize(mean=mean,
@@ -283,9 +285,9 @@ def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namesp
         img_transforms.append(transforms.Grayscale())
     img_transforms = transforms.Compose(img_transforms)
     split_names = ['train', 'valid', 'test']
-    if args.dataset_name == 'oct':
+    if args.dataset_name == 'oct' and supervised:
         split_names = [f'{s}_supervised' for s in split_names]
-    train_dataset = OCTDataset(root_path, split_names[0],
+    train_dataset = OCTDataset(root_path, 'train', # split_names[0],
                                args.map_df_paths, args.labels_dict,
                                ch_in=args.img_channel,
                                sample_within_image=args.sample_within_image,
@@ -321,6 +323,25 @@ def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namesp
     test_loader = DataLoader(test_dataset, batch_size=batch_size,
                              num_workers=0, drop_last=False, shuffle=shuffle)
     return train_loader, valid_loader, test_loader
+
+
+def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, supervised=False, shuffle=False):
+    return get_oct_data_loaders(root_path, args, batch_size, mean, std, True, shuffle)
+
+
+def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):
+    train_dataset = datasets.STL10(root_path, split='train', download=download,
+                                   transform=transforms.ToTensor())
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size,
+                              num_workers=0, drop_last=False, shuffle=shuffle)
+
+    test_dataset = datasets.STL10(root_path, split='test', download=download,
+                                  transform=transforms.ToTensor())
+
+    test_loader = DataLoader(test_dataset, batch_size=batch_size,
+                             num_workers=0, drop_last=False, shuffle=shuffle)
+    return train_loader, test_loader
 
 
 def open_mat_file(file: pathlib.Path):

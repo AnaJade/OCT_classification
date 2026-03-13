@@ -325,7 +325,7 @@ def main():
 
     # Calculate metrics
     print(f"Test set results using {args.arch} backbone:")
-    report = classification_report(test_labels, test_preds, target_names=labels)
+    report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
     print(report)
 
 
