@@ -287,7 +287,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
     split_names = ['train', 'valid', 'test']
     if args.dataset_name == 'oct' and supervised:
         split_names = [f'{s}_supervised' for s in split_names]
-    train_dataset = OCTDataset(root_path, 'train', # split_names[0],
+    train_dataset = OCTDataset(root_path, split_names[0],
                                args.map_df_paths, args.labels_dict,
                                ch_in=args.img_channel,
                                sample_within_image=args.sample_within_image,
