@@ -10,6 +10,7 @@ import timm
 from addict import Dict
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
 
 import torch
 from torch import nn
@@ -126,6 +127,10 @@ if __name__ == "__main__":
     else:
         args.img_size = 512  # BYOL requires square images, so all images will be reshaped to 512x512
     args.ascan_per_group = ascan_per_group
+    if overwrite_labels is not None:
+        labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
+        args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
+        num_cluster_dict['oct'] = len(labels)
 
     # Training params
     args.seed = configs['training']['random_seed']
