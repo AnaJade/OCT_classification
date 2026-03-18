@@ -1,5 +1,6 @@
 import argparse
 import pathlib
+import re
 from sys import platform
 
 import numpy as np
@@ -99,6 +100,57 @@ def get_img_dataset_info(dataset_root:pathlib.Path, jpg_root_path:pathlib.Path, 
     img_paths['idx_end'] = [int(p.stem.split('_')[-1]) for p in img_paths['path']]
 
     return img_paths.sort_values(['trajectory', 'idx_start'], ascending=[True, True])
+
+
+def update_labels(img_info: pd.DataFrame, overwrite_lbls: pd.DataFrame) -> pd.DataFrame:
+    img_count_start = len(img_info)
+    # Reformat table (old label, new label, area, og_str)
+    new_lbls = []
+    for new_lbl in overwrite_lbls.columns:
+        new_lbls.append(pd.DataFrame.from_dict(
+            {'new_lbl': len(overwrite_lbls[new_lbl])*['_'.join(new_lbl.lower().split(' '))],
+             'area_str': [a.lower() for a in overwrite_lbls[new_lbl].tolist()]},
+            orient='columns'))
+    new_lbls = pd.concat(new_lbls, axis=0)
+
+    # Get old labels
+    old_lbls = img_info['label'].unique().tolist()
+    new_lbls.loc[:, 'old_lbl'] = ''
+    for old_lbl in old_lbls:
+        new_lbls.loc[new_lbls['new_lbl'].str.contains(old_lbl), 'old_lbl'] = old_lbl
+    new_lbls = new_lbls[new_lbls['old_lbl'] != '']
+    # Isolate area info
+    new_lbls.loc[:, 'area'] = [s.split(' ')[0] for s in new_lbls['area_str']]
+    # Check if split is needed
+    new_lbls.loc[:, 'section'] = [s[s.find('(')+1:s.find(')')] if s.find('(') != -1 else 'all' for s in new_lbls['area_str']]
+
+    # Get area info in img_info
+    # img_info.loc[:, 'area'] = [re.sub('|'.join(f'{f}_' for f in old_lbls), '', p.parts[1]) for p in img_info['img_relative_path']]
+    img_info.loc[:, 'area'] = [n.split('_')[-1] for n in img_info['folder']]
+    # Merge to img_info
+    img_info = pd.merge(img_info, new_lbls[['new_lbl', 'old_lbl', 'area', 'section']], left_on=['label', 'area'], right_on=['old_lbl', 'area'], how='left').drop(columns=['old_lbl']).rename(columns={'label': 'old_label', 'new_lbl': 'label'})
+
+    # Remove areas without new labels
+    img_info = img_info[img_info['label'].apply(type) == str].copy()
+    # Remove sections if needed
+    section_splits = img_info['section'].unique().tolist()
+    section_splits.remove('all')
+    section_splits = img_info[img_info['section'].isin(section_splits)].groupby(['label', 'area', 'trajectory']).agg(max_idx=('idx_end', 'max')).reset_index()
+    section_splits.loc[:, 'mean_idx'] = section_splits['max_idx'] / 2
+    section_splits = pd.merge(section_splits, img_info.groupby(['label', 'area']).head(1)[['label', 'area', 'section']], on=['label', 'area'], how='left')
+    for idx in section_splits.index:
+        label = section_splits.loc[idx, 'label']
+        area = section_splits.loc[idx, 'area']
+        trajectory = section_splits.loc[idx, 'trajectory']
+        keep = section_splits.loc[idx, 'section']
+        idx_thresh = section_splits.loc[idx, 'mean_idx']
+        if keep == 'first half':
+            img_info = img_info[~((img_info['label'] == label) & (img_info['area'] == area) & (img_info['trajectory'] == trajectory) & (img_info['idx_end'] > idx_thresh))].copy()
+        elif keep == 'second half':
+            img_info = img_info[~((img_info['label'] == label) & (img_info['area'] == area) & (img_info['trajectory'] == trajectory) & (img_info['idx_end'] < idx_thresh))].copy()
+    img_count_end = len(img_info)
+    print(f"Removed {img_count_start - img_count_end} images, {img_count_end} remaining.")
+    return img_info
 
 
 def split_train_valid_test(ds_split: list, jpg_files_info:pd.DataFrame, labels: list) -> pd.DataFrame:
@@ -245,14 +297,29 @@ def create_mapping_dfs(jpg_root_path: pathlib.Path, df_split:pd.DataFrame, jpg_f
     # Create map df
     print("Creating the mapping dataframes...")
     sub_sets = df_split['split'].unique().tolist()
+    if 'old_label' in jpg_files_info.columns:
+        new_lbl_str = 'newLbls_'
+        cols_to_keep = ['img_relative_path', 'label', 'old_label', 'idx_start', 'idx_end']
+    else:
+        new_lbl_str = ''
+        cols_to_keep = ['img_relative_path', 'label', 'idx_start', 'idx_end']
+    if 'traj_type' in jpg_files_info.columns:
+        traj_str = f"{''.join([t.capitalize() for t in jpg_files_info['traj_type'].unique().tolist()])}_"
+    else:
+        traj_str = ''
+
     for split in sub_sets:
-        # traj_in_split = df_split[df_split['split'] == split]
         traj_in_split = df_split[df_split['split'] == split].reset_index()
-        df_map_split = jpg_files_info[jpg_files_info['folder'].isin(traj_in_split['folder'])][
-            ['img_relative_path', 'label', 'idx_start', 'idx_end']]
+        df_map_split = jpg_files_info[jpg_files_info['folder'].isin(traj_in_split['folder'])][cols_to_keep].reset_index(drop=True)
+
+        # Reserve 10% for supervised training
+        df_map_split.loc[:, 'subset'] = split
+        # Reserve 10% of data for supervised training
+        df_map_split.loc[df_map_split.index % 10 == 9, 'subset'] = f'{split}_supervised'
+        print(f"{round((len(df_map_split[df_map_split['subset'].str.contains('supervised')]) / len(df_map_split)) * 100, 2)}% ({len(df_map_split[df_map_split['subset'].str.contains('supervised')])}/{len(df_map_split)}) of images in the {split} set are reserved for supervised learning.")
 
         # Save to csv
-        map_df_path = f"{split}{'Mini' if mini_dataset else ''}_mapping_{ascan_per_group}scans.csv"
+        map_df_path = f"{split}{'Mini' if mini_dataset else ''}_mapping_{new_lbl_str}{traj_str}{ascan_per_group}scans.csv"
         print(f"Saving {split} mapping as {map_df_path}...")
         df_map_split.to_csv(jpg_root_path.joinpath(map_df_path), index=False)
 
@@ -296,22 +363,25 @@ if __name__ == '__main__':
     configs = utils.load_configs(config_file)
     if platform == "linux" or platform == "linux2":
         dataset_root = pathlib.Path(configs['data']['dataset_root_linux'])
+        target_path = pathlib.Path(r"/data/Boudreault/OCT_lab_data")
     elif platform == "win32":
         dataset_root = pathlib.Path(configs['data']['dataset_root_windows'])
+        target_path = dataset_root
     ds_split = configs['data']['ds_split']
     labels = configs['data']['labels']
+    trajectories = configs['data']['trajectories']
     ascan_per_group = configs['data']['ascan_per_group']
+    overwrite_labels = configs['data']['overwrite_labels']
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
 
     # Dataset target path (if different then dataset_root)
     # target_path = pathlib.Path(r"C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data")
-    target_path = pathlib.Path(r"/data/Boudreault/OCT_lab_data")
     # img_root_path = target_path.joinpath(f"{ascan_per_group}mscans")
     img_root_path = target_path.joinpath(build_image_root(ascan_per_group, pre_processing))
 
     # Save images as individual .jpg chunks
-    save_as_img(dataset_root, img_root_path, ascan_per_group, labels, use_mini_dataset)
+    # save_as_img(dataset_root, img_root_path, ascan_per_group, labels, use_mini_dataset)
 
     # Get jpg file info
     jpg_files_info = get_img_dataset_info(target_path, img_root_path, labels)
@@ -320,6 +390,22 @@ if __name__ == '__main__':
     #   Due to noise removal and sampling, idx_end - idx_start no longer equals ascan_per_group
     if ('noNoise' in img_root_path.stem) or ('sample' in img_root_path.stem):
         jpg_files_info.loc[:, 'idx_end'] = jpg_files_info.loc[:, 'idx_start'] + ascan_per_group-1
+
+    # Filter trajectories
+    if len(trajectories) < 3:
+        # Add traj info
+        jpg_files_info.loc[:, 'traj_type'] = ''
+        jpg_files_info.loc[jpg_files_info['trajectory'].str.contains('line'), 'traj_type'] = 'line'
+        jpg_files_info.loc[jpg_files_info['trajectory'].str.contains('sine'), 'traj_type'] = 'sine'
+        jpg_files_info.loc[jpg_files_info['trajectory'].str.contains('jitter'), 'traj_type'] = 'jitter'
+        # Keep only desired trajectory
+        jpg_files_info = jpg_files_info[jpg_files_info['traj_type'].isin(trajectories)].copy()
+
+    # Update labels
+    if overwrite_labels is not None:
+        print(f"Overwriting labels, and removing extra images...")
+        overwrite_labels = pd.read_excel(dataset_root.joinpath(overwrite_labels))
+        jpg_files_info = update_labels(jpg_files_info, overwrite_labels)
 
     # Split into train-valid-test
     df_split = split_train_valid_test(ds_split, jpg_files_info, labels)

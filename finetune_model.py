@@ -198,7 +198,9 @@ def main():
     elif platform == "win32":
         dataset_path = pathlib.Path(configs['finetune']['dataset_path_windows'])
     labels = configs['data']['labels']
+    trajectories = configs['data']['trajectories']
     ascan_per_group = configs['data']['ascan_per_group']
+    overwrite_labels = configs['data']['overwrite_labels']
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
     args.dataset_name = configs['finetune']['dataset_name']
@@ -225,9 +227,11 @@ def main():
     image_root = build_image_root(ascan_per_group, pre_processing)
     print(f"dataset image root: {args.data.joinpath(image_root)}")
     args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
+    new_lbl_str = 'newLbls_' if overwrite_labels is not None else ''
+    traj_str = f"{''.join([t.capitalize() for t in trajectories])}_" if len(trajectories) < 3 else ''
     args.map_df_paths = {
         split: args.data.joinpath(image_root).joinpath(
-            f"{split}{'Mini' if use_mini_dataset else ''}_mapping_{ascan_per_group}scans.csv")
+            f"{split}{'Mini' if use_mini_dataset else ''}_mapping_{new_lbl_str}{traj_str}{ascan_per_group}scans.csv")
         for split in ['train', 'valid', 'test']}
     args.img_channel = configs['finetune']['img_channel']
     if 'oct' not in args.dataset_name:

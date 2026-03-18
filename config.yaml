@@ -1,14 +1,19 @@
 data:
   dataset_root_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
   dataset_root_linux: /data/Boudreault/OCT_lab_data_raw
-  ds_split: [0.6, 0.15, 0.25]
+  ds_split: [0.5, 0.25, 0.25]
   labels:
     - chicken_heart
     - chicken_stomach
     - lamb_heart
     - lamb_testicle
     # - lamb_liver
+  trajectories:
+    # - jitter
+    # - line
+    - sine
   ascan_per_group: 512 # Baseline: 512
+  overwrite_labels: Classes.xlsx
   pre_processing:
     no_noise: True # Baseline: True
     use_movmean: False
@@ -54,7 +59,7 @@ BYOL:
   img_reshape: 480 # 480, 224 for ViT
   use_iipp: True
   dataset_sample: 1 # 0.25  # Sample of the entire dataset
-  arch: efficientnetb3 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
+  arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
   max_epochs: 500

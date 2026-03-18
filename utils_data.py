@@ -103,7 +103,8 @@ class OCTDataset(Dataset): # Used in train_moco
         # Not needed with new method of generating images
         # self.map_df = self.map_df.loc[self.map_df['idx_end'] - self.map_df['idx_start'] == ascan_per_group]
 
-        # Assign new subset if needed
+        # Assign new subset if needed (Now done in prep_oct_data)
+        """
         self.map_df.loc[:, 'subset_id'] = self.map_df.groupby(['area_id', 'trajectory']).cumcount()
         self.map_df.loc[:, 'subset'] = ''
         # Reserve 10% of data for supervised training
@@ -111,6 +112,7 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df.loc[self.map_df['subset'] != f'{split}_supervised', 'subset'] = split
         self.map_df = self.map_df.drop(columns=['subset_id'])
         print(f"{round((len(self.map_df[self.map_df['subset'].str.contains('supervised')])/len(self.map_df[~self.map_df['subset'].str.contains('supervised')]))*100, 2)}% ({len(self.map_df[self.map_df['subset'].str.contains('supervised')])}/{len(self.map_df[~self.map_df['subset'].str.contains('supervised')])}) of images in the {split} set are reserved for supervised learning.")
+        """
         if supervised: # subset is not None:
             # Assign subset with [0.6, 0.2, 0.2] split
             # self.map_df.loc[:, 'subset'] = ''
@@ -142,10 +144,12 @@ class OCTDataset(Dataset): # Used in train_moco
             self.map_df = self.map_df.groupby(['label_str', 'area', 'traj']).sample(frac=self.pre_sample)
             self.map_df = self.map_df.drop(columns=['area', 'traj'])
             self.map_df = self.map_df.reset_index(drop=True)
+        """
         elif self.pre_sample == 2:
             # Remove images from sin traj
             print(f"Removing images from sin trajectory...")
             self.map_df = self.map_df[~self.map_df['trajectory'].str.contains('sin')].copy()
+        """
 
         if self.use_iipp and self.num_same_area < 1:
             # Make the number of imgs per area even
