@@ -76,6 +76,7 @@ class OCTDataset(Dataset): # Used in train_moco
         self.pre_sample = pre_sample
         self.map_df_sampling = None # set for iipp when num_same_area >= 2
         self.show = False # For debug purposes
+        self.new_labels = 'old_label' in self.map_df.columns
 
         # Update relative path to image paths
         ascan_per_group = self.map_df['idx_end'].iloc[0]
@@ -86,14 +87,15 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df = self.map_df.rename(columns={'label': 'label_str'})
         for i, lbl in self.label_dict.items():
             self.map_df.loc[self.map_df['label_str'] == lbl, 'label'] = i
-        missing_labels = [l for l in labels_dict.values() if l not in self.map_df['label_str'].unique()]
-        extra_labels = self.map_df[self.map_df['label'].isna()]['label_str'].unique().tolist()
-        if len(missing_labels) > 0:
-            print(f"{missing_labels} not found in mapping dataset")
-        if len(extra_labels) > 0:
-            print(f"{extra_labels} label found in mapping dataset but not in label dict")
-            print(f"Removing images...")
-            self.map_df = self.map_df.dropna(axis=0)
+        if not self.new_labels:
+            missing_labels = [l for l in labels_dict.values() if l not in self.map_df['label_str'].unique()]
+            extra_labels = self.map_df[self.map_df['label'].isna()]['label_str'].unique().tolist()
+            if len(missing_labels) > 0:
+                print(f"{missing_labels} not found in mapping dataset")
+            if len(extra_labels) > 0:
+                print(f"{extra_labels} label found in mapping dataset but not in label dict")
+                print(f"Removing images...")
+                self.map_df = self.map_df.dropna(axis=0)
 
         self.map_df['area'] = [re.sub('|'.join(f'{f}_' for f in self.label_dict.values()), '', p.parts[1]) for p in self.map_df['img_relative_path']]
         self.map_df['trajectory'] = ['_'.join(p.stem.split('_')[:-2]) for p in self.map_df['img_relative_path']]
