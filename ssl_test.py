@@ -186,7 +186,7 @@ class LogisticRegressionEvaluator(object):
                 best_report = classification_report(eval_df_epoch['label'], eval_df_epoch['pred'],
                                                     target_names=self.args.labels_dict.values(),
                                                     digits=4, zero_division=np.nan)
-                torch.save(self.log_regression.state_dict(), save_folder.join_path('log_regression.pth'))
+                torch.save(self.log_regression.state_dict(), save_folder.joinpath('log_regression.pth'))
 
         print("--------------")
         print("Done training")
