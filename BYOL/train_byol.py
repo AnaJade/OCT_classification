@@ -1,5 +1,7 @@
 import argparse
 import pathlib
+
+import pandas as pd
 import pynvml
 import random
 import sys
@@ -93,7 +95,6 @@ if __name__ == "__main__":
         'OCT_lab_data' if args.dataset_name == 'oct' else args.dataset_name)
     image_root = build_image_root(ascan_per_group, pre_processing)
     print(f"dataset image root: {dataset_root.joinpath(image_root)}")
-    args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
     new_lbl_str = 'newLbls_' if overwrite_labels is not None else ''
     traj_str = f"{''.join([t.capitalize() for t in trajectories])}_" if len(trajectories) < 3 else ''
     args.map_df_paths = {
@@ -111,6 +112,10 @@ if __name__ == "__main__":
         args.img_size = 512 # BYOL requires square images, so all images will be reshaped to 512x512
     args.use_iipp = configs['BYOL']['use_iipp']
     args.ascan_per_group = ascan_per_group
+    if overwrite_labels is not None:
+        labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
+        args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
+        num_cluster_dict['oct'] = len(labels)
 
     # Training params
     args.seed = configs['training']['random_seed']
