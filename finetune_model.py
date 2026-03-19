@@ -24,7 +24,7 @@ import torch.nn.functional as F
 from sklearn.metrics import precision_score, recall_score, adjusted_rand_score, normalized_mutual_info_score, classification_report
 
 from BYOL.feature_model import get_backbone
-from BYOL.test_byol import get_oct_data_loaders, get_stl10_data_loaders
+from BYOL.test_byol import  get_stl10_data_loaders
 
 from SimCLR.models.resnet_simclr import FeatureModelSimCLR
 

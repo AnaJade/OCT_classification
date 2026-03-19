@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from sklearn.metrics import classification_report
 
 from BYOL.feature_model import get_backbone
-from BYOL.test_byol import get_oct_data_loaders, get_stl10_data_loaders
+from BYOL.test_byol import get_stl10_data_loaders
 
 from finetune_model import SupervisedModel
 
@@ -28,7 +28,7 @@ from finetune_model import SupervisedModel
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_supervised_oct_data_loaders, build_image_root
+from utils_data import get_supervised_oct_data_loaders, get_oct_data_loaders, build_image_root
 
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
@@ -133,7 +133,7 @@ def main():
     new_lbl_str = 'newLbls_' if overwrite_labels is not None else ''
     traj_str = f"{''.join([t.capitalize() for t in trajectories])}_" if len(trajectories) < 3 else ''
     args.map_df_paths = {
-        split: args.dataset_name.joinpath(image_root).joinpath(
+        split: args.data.joinpath(image_root).joinpath(
             f"{split}{'Mini' if use_mini_dataset else ''}_mapping_{new_lbl_str}{traj_str}{ascan_per_group}scans.csv")
         for split in ['train', 'valid', 'test']}
     args.img_channel = configs['finetune']['img_channel']
