@@ -205,6 +205,7 @@ if __name__ == '__main__':
         dataset_root = pathlib.Path(configs['data']['dataset_root_linux'])
     elif platform == "win32":
         dataset_root = pathlib.Path(configs['data']['dataset_root_windows'])
+        dataset_root = pathlib.Path(r"Y:\OCT_clinical_data\OCTData")
     ds_split = configs['data']['ds_split']
     labels = configs['data']['labels']
     ascan_per_group = configs['data']['ascan_per_group']
@@ -225,6 +226,15 @@ if __name__ == '__main__':
         img_root_path = target_path.joinpath(build_image_root(ascan_per_group, pre_processing))
         # Get jpg file info
         jpg_files_info = get_clinical_img_dataset_info(target_path, img_root_path, merged_labels)
+        # Filter for corrected labels
+        traj_to_remove = ['pat01_vc_re_run1',
+                          'pat04_vc_le_run1',
+                          'pat04_vc_le_run3',
+                          'pat04_vc_re_run2', # TODO: confirm if re was meant instead of le
+                          'pat06_vc_re_run1',
+                          'pat07_vc_re_run1',
+                          'pat15_vc_le_run1']
+        jpg_files_info = jpg_files_info[~jpg_files_info['trajectory'].str.contains('|'.join(f'{f}_' for f in traj_to_remove))].copy()
 
     else:
         # target_path = pathlib.Path(r"C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data")
