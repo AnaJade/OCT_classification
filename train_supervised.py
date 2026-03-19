@@ -251,7 +251,7 @@ def main():
     plt.ylabel('True label')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig(args.save_folder.joinpath('confusion_matrix.png'))
+    plt.savefig(args.save_folder.joinpath(f"confusion_matrix_{'_'.join(lbls_to_keep)}.png"))
     plt.show()
 
 
