@@ -310,7 +310,10 @@ def create_mapping_dfs(jpg_root_path: pathlib.Path, df_split:pd.DataFrame, jpg_f
 
     for split in sub_sets:
         traj_in_split = df_split[df_split['split'] == split].reset_index()
-        df_map_split = jpg_files_info[jpg_files_info['folder'].isin(traj_in_split['folder'])][cols_to_keep].reset_index(drop=True)
+        if 'old_label' in jpg_files_info.columns:
+            df_map_split = pd.merge(jpg_files_info, traj_in_split[['label', 'area', 'col_count']], on=['label', 'area'], how='right')[cols_to_keep]
+        else:
+            df_map_split = jpg_files_info[jpg_files_info['folder'].isin(traj_in_split['folder'])][cols_to_keep].reset_index(drop=True)
 
         # Reserve 10% for supervised training
         df_map_split.loc[:, 'subset'] = split
@@ -406,9 +409,20 @@ if __name__ == '__main__':
         print(f"Overwriting labels, and removing extra images...")
         overwrite_labels = pd.read_excel(dataset_root.joinpath(overwrite_labels))
         jpg_files_info = update_labels(jpg_files_info, overwrite_labels)
-
-    # Split into train-valid-test
-    df_split = split_train_valid_test(ds_split, jpg_files_info, labels)
+        labels = jpg_files_info['label'].unique()
+        print(f"New labels: {labels}")
+        # Split into train-valid-test
+        df_split = jpg_files_info.groupby(['label', 'area']).agg(col_count=('img_relative_path', 'count')).reset_index()
+        df_split.loc[:, 'col_count'] = df_split['col_count']*ascan_per_group
+        df_split = df_split.sort_values(by=['label', 'col_count'], ascending=[True, False])
+        df_split.loc[:, 'order_id'] = df_split.groupby('label').cumcount()
+        df_split.loc[:, 'split'] = ''
+        df_split.loc[df_split['order_id'] % 3 == 0, 'split'] = 'train'
+        df_split.loc[df_split['order_id'] % 3 == 1, 'split'] = 'test'
+        df_split.loc[df_split['order_id'] % 3 == 2, 'split'] = 'valid'
+    else:
+        # Split into train-valid-test
+        df_split = split_train_valid_test(ds_split, jpg_files_info, labels)
 
     # Save mapping dfs
     create_mapping_dfs(img_root_path, df_split, jpg_files_info, ascan_per_group, use_mini_dataset)
