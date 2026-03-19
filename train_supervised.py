@@ -153,6 +153,14 @@ def main():
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
         args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
         num_cluster_dict['oct'] = len(labels)
+    lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside'] # None
+    # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_inside']
+    # lbls_to_keep = ['chicken_heart_outside', 'chicken_stomach_inside']
+    if lbls_to_keep is not None:
+        labels = lbls_to_keep
+        args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
+        num_cluster_dict['oct'] = len(labels)
+
 
     # Training params
     args.seed = configs['training']['random_seed']
@@ -206,11 +214,11 @@ def main():
     model = FullSupervisedModel(args)
 
     # Update labels
-    lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside']
-    for l in [train_loader, valid_loader, test_loader]:
-        l.dataset.map_df = l.dataset.map_df[l.dataset.map_df['label_str'].isin(lbls_to_keep)].copy()
-    # Update model weights name
-    model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(f"supervised_best_loss_{'_'.join(lbls_to_keep)}.pt")
+    if lbls_to_keep is not None:
+        for l in [train_loader, valid_loader, test_loader]:
+            l.dataset.map_df = l.dataset.map_df[l.dataset.map_df['label_str'].isin(labels)].copy()
+        # Update model weights name
+        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(f"supervised_best_loss_{'_'.join(labels)}.pt")
 
     # Train weights
     print(f"Train model")
@@ -251,7 +259,11 @@ def main():
     plt.ylabel('True label')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig(args.save_folder.joinpath(f"confusion_matrix_{'_'.join(lbls_to_keep)}.png"))
+    if lbls_to_keep is not None:
+        cm_path = f"confusion_matrix_{'_'.join(lbls_to_keep)}.png"
+    else:
+        cm_path = f"confusion_matrix.png"
+    plt.savefig(args.save_folder.joinpath(cm_path))
     plt.show()
 
 
