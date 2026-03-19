@@ -8,16 +8,18 @@ from sys import platform
 import torch
 import torch.backends.cudnn as cudnn
 from addict import Dict
+from matplotlib.pyplot import xticks
 from torchvision import models
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 
 from BYOL.feature_model import get_backbone
 from BYOL.test_byol import get_stl10_data_loaders
@@ -229,6 +231,18 @@ def main():
     print(f"Test set results using {args.arch} backbone:")
     report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
     print(report)
+
+    # Get confusion matrix display
+    cm = confusion_matrix(test_labels, test_preds)
+    cm_plot = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+    cm_plot.plot()
+    plt.title('Confusion matrix')
+    plt.xlabel('Predicted label')
+    plt.ylabel('True label')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig(args.save_folder.joinpath('confusion_matrix.png'))
+    plt.show()
 
 
 if __name__ == "__main__":
