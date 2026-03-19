@@ -407,7 +407,7 @@ if __name__ == '__main__':
     # Update labels
     if overwrite_labels is not None:
         print(f"Overwriting labels, and removing extra images...")
-        overwrite_labels = pd.read_excel(dataset_root.joinpath(overwrite_labels))
+        overwrite_labels = pd.read_excel(target_path.joinpath(overwrite_labels))
         jpg_files_info = update_labels(jpg_files_info, overwrite_labels)
         labels = jpg_files_info['label'].unique()
         print(f"New labels: {labels}")
