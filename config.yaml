@@ -39,7 +39,7 @@ SimCLR:
   arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
-  max_epochs: 200
+  max_epochs: 500
   batch_size: 128 # 256 # Must be a multiple of num_same_area if iipp is used
   lr: 0.0003
   weight_decay: 0.0001
@@ -48,7 +48,7 @@ SimCLR:
   log_every_n_steps: 2000 # Print update every x batch
   temperature: 0.07 # 0.07 in paper, but 0.5 is often used in code samples
   gpu_index: 0
-  patience: 10
+  patience: 20
 BYOL:
   dataset_name: oct  # [stl10, cifar10, cifar100]
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
@@ -63,7 +63,7 @@ BYOL:
   use_pretrained: True
   num_workers: 0
   max_epochs: 500
-  batch_size: 128
+  batch_size: 64
   lr: 0.0003
   disable_cuda: False
   gpu_index: 0
@@ -87,8 +87,8 @@ DINO:
   gpu_index: 0
   patience: 10 # 20
 finetune:
-  dataset_name: oct_clinical  # [stl10, cifar10, cifar100]
-  dataset_path_windows: X:\Boudreault # C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  dataset_name: oct # oct_clinical  # [stl10, cifar10, cifar100]
+  dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit # X:\Boudreault
   dataset_path_linux: /data/Boudreault
   dataset_path_hpc: /usertemp/mts/cab8351
   img_channel: 1

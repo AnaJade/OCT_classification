@@ -191,16 +191,26 @@ def main():
 
     # Create train and test sets
     if 'oct' in args.dataset_name:
-        train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
+        # train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
+        #                                                                mean=mean[args.dataset_name],
+        #                                                                std=std[args.dataset_name],
+        #                                                                shuffle=False)
+        train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
                                                                        mean=mean[args.dataset_name],
                                                                        std=std[args.dataset_name],
                                                                        shuffle=False)
     else:
         train_loader, test_loader = get_stl10_data_loaders(args.data, args.batch_size, shuffle=False,
                                                            download=False)
-
     # Define model
     model = FullSupervisedModel(args)
+
+    # Update labels
+    lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside']
+    for l in [train_loader, valid_loader, test_loader]:
+        l.dataset.map_df = l.dataset.map_df[l.dataset.map_df['label_str'].isin(lbls_to_keep)].copy()
+    # Update model weights name
+    model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(f"supervised_best_loss_{'_'.join(lbls_to_keep)}.pt")
 
     # Train weights
     print(f"Train model")
