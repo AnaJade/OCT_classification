@@ -102,6 +102,7 @@ def main():
             dataset_path = pathlib.Path(configs['finetune']['dataset_path_linux'])
     elif platform == "win32":
         dataset_path = pathlib.Path(configs['finetune']['dataset_path_windows'])
+    args.sequential_split = configs['finetune']['sequential_split']
     labels = configs['data']['labels']
     trajectories = configs['data']['trajectories']
     ascan_per_group = configs['data']['ascan_per_group']
@@ -153,9 +154,16 @@ def main():
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
         args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
         num_cluster_dict['oct'] = len(labels)
-    lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside'] # None
-    # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_inside']
-    # lbls_to_keep = ['chicken_heart_outside', 'chicken_stomach_inside']
+        lbls_to_keep = None
+        # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside'] # None
+        # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_inside']
+        # lbls_to_keep = ['chicken_stomach_outside', 'chicken_stomach_inside']
+        # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside', 'chicken_stomach_inside']
+        # lbls_to_keep = ['lamb_heart_muscle', 'chicken_stomach_inside']
+        # lbls_to_keep = ['lamb_heart_muscle', 'lamb_heart_fat']
+        # lbls_to_keep = ['lamb_heart_fat', 'chicken_stomach_inside']
+        # lbls_to_keep = ['lamb_heart_muscle', 'chicken_stomach_outside', 'chicken_stomach_inside']
+        # lbls_to_keep = ['chicken_heart_muscle', 'lamb_heart_muscle']
     if lbls_to_keep is not None:
         labels = lbls_to_keep
         args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
@@ -202,11 +210,13 @@ def main():
         # train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
         #                                                                mean=mean[args.dataset_name],
         #                                                                std=std[args.dataset_name],
-        #                                                                shuffle=False)
+        #                                                                shuffle=True,
+        #                                                                seq_split=args.sequential_split)
         train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
                                                                        mean=mean[args.dataset_name],
                                                                        std=std[args.dataset_name],
-                                                                       shuffle=False)
+                                                                       shuffle=True,
+                                                                       seq_split=args.sequential_split)
     else:
         train_loader, test_loader = get_stl10_data_loaders(args.data, args.batch_size, shuffle=False,
                                                            download=False)

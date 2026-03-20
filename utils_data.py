@@ -41,7 +41,9 @@ import utils
 
 
 class OCTDataset(Dataset): # Used in train_moco
-    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, ch_in=3, sample_within_image=-1, use_iipp=False, num_same_area=-1, transforms=None, preload_data=False, pre_shuffle=True, pre_sample=1):
+    def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, ch_in=3,
+                 sample_within_image=-1, use_iipp=False, num_same_area=-1, transforms=None, pre_shuffle=True,
+                 pre_sample=1, seq_split=False):
         """
         Dataset object used to pass images to a siamese network
         :param root: dataset root path
@@ -64,6 +66,7 @@ class OCTDataset(Dataset): # Used in train_moco
         self.root = root
         self.transforms = transforms
         self.split = split
+        self.seq_split = seq_split
         self.map_df = map_df_paths[split]
         self.map_df_sampling = None
         self.label_dict = labels_dict
@@ -72,6 +75,8 @@ class OCTDataset(Dataset): # Used in train_moco
         self.use_iipp = use_iipp
         self.num_same_area = num_same_area
         self.map_df = pd.read_csv(self.map_df)
+        if self.seq_split:
+            self.map_df = pd.concat([pd.read_csv(p) for p in map_df_paths.values()], axis=0, ignore_index=True)
         self.pre_shuffle = pre_shuffle
         self.pre_sample = pre_sample
         self.map_df_sampling = None # set for iipp when num_same_area >= 2
@@ -105,6 +110,26 @@ class OCTDataset(Dataset): # Used in train_moco
         # Not needed with new method of generating images
         # self.map_df = self.map_df.loc[self.map_df['idx_end'] - self.map_df['idx_start'] == ascan_per_group]
 
+        # Redo splitting
+        if self.seq_split:
+            # New re-splitting
+            self.map_df['id_traj'] = self.map_df.groupby('trajectory').cumcount()
+            # Get idx thresh per traj
+            idx_split = self.map_df.groupby('trajectory').agg(max_idx=('id_traj', 'max'))
+            idx_split.loc[:, 'max_train'] = idx_split.loc[:, 'max_idx'] * 0.6
+            idx_split.loc[:, 'max_valid'] = idx_split.loc[:, 'max_idx'] * 0.8
+            idx_split = idx_split.drop(columns=['max_idx']).reset_index()
+            self.map_df = pd.merge(self.map_df, idx_split, on='trajectory')
+            # Redefine subsets
+            self.map_df.loc[:, 'subset'] = ''
+            self.map_df.loc[self.map_df['id_traj'] < self.map_df['max_train'], 'subset'] = 'train'
+            self.map_df.loc[self.map_df['id_traj'] > self.map_df['max_valid'], 'subset'] = 'test'
+            self.map_df.loc[self.map_df['subset'] == '', 'subset'] = 'valid'
+            # Redefine supervised subset
+            self.map_df.loc[self.map_df['id_traj'] % 10 == 9, 'subset'] = [f"{s}_supervised" for s in self.map_df.loc[self.map_df['id_traj'] % 10 == 9, 'subset']]
+            # Remove extra cols
+            self.map_df = self.map_df.drop(columns=['id_traj', 'max_train', 'max_valid'])
+
         # Assign new subset if needed (Now done in prep_oct_data)
         """
         self.map_df.loc[:, 'subset_id'] = self.map_df.groupby(['area_id', 'trajectory']).cumcount()
@@ -116,15 +141,9 @@ class OCTDataset(Dataset): # Used in train_moco
         print(f"{round((len(self.map_df[self.map_df['subset'].str.contains('supervised')])/len(self.map_df[~self.map_df['subset'].str.contains('supervised')]))*100, 2)}% ({len(self.map_df[self.map_df['subset'].str.contains('supervised')])}/{len(self.map_df[~self.map_df['subset'].str.contains('supervised')])}) of images in the {split} set are reserved for supervised learning.")
         """
         if supervised: # subset is not None:
-            # Assign subset with [0.6, 0.2, 0.2] split
-            # self.map_df.loc[:, 'subset'] = ''
-            # self.map_df.loc[self.map_df.index % 5 <= 2, 'subset'] = 'test_train'
-            # self.map_df.loc[self.map_df.index % 5 == 3, 'subset'] = 'test_valid'
-            # self.map_df.loc[self.map_df.index % 5 == 4, 'subset'] = 'test_test'
-            # self.map_df = self.map_df[self.map_df['subset'] == f'test_{subset}'].copy()
-            self.map_df = self.map_df[self.map_df['subset'] == f'{split}_supervised'].copy()
+            self.map_df = self.map_df[self.map_df['subset'] == f'{split}_supervised'].reset_index(drop=True).copy()
         else:
-            self.map_df = self.map_df[self.map_df['subset'] == f'{split}'].copy()
+            self.map_df = self.map_df[self.map_df['subset'] == f'{split}'].reset_index(drop=True).copy()
 
         if (self.sample_within_image > 1) and (self.sample_within_image < ascan_per_group):
             self.map_df.loc[:, 'img_idx_start'] = self.map_df.loc[:, 'idx_start']
@@ -252,7 +271,10 @@ class OCTDataset(Dataset): # Used in train_moco
                 img_idx_start = self.map_df['img_idx_start'].iloc[idx]
                 img_idx_end = self.map_df['img_idx_end'].iloc[idx]
                 data = data[:, img_idx_start:img_idx_end, :]
-            data = Image.fromarray(data)
+            try:
+                data = Image.fromarray(data)
+            except AttributeError:
+                print(f"Problem with idx{idx}: {scan_path}")
 
             # Apply transforms
             if self.transforms is not None:
@@ -282,7 +304,7 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df_sampling.loc[:, 'weights'] = 1
 
 
-def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, supervised=False, shuffle=False):
+def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
     img_transforms = [transforms.ToTensor(),
                       transforms.Resize((args.img_reshape, args.img_reshape)),
                       transforms.Normalize(mean=mean,
@@ -300,7 +322,8 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                                use_iipp=False, # args.use_iipp,
                                num_same_area=-1,
                                transforms=img_transforms,
-                               pre_sample=args.dataset_sample)
+                               pre_sample=args.dataset_sample,
+                               seq_split=seq_split)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size,
                               num_workers=0, drop_last=False, shuffle=shuffle)
@@ -312,10 +335,11 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                                use_iipp=False,  # args.use_iipp,
                                num_same_area=-1,
                                transforms=img_transforms,
-                               pre_sample=args.dataset_sample)
+                               pre_sample=args.dataset_sample,
+                               seq_split=seq_split)
 
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size,
-                              num_workers=0, drop_last=False, shuffle=shuffle)
+                              num_workers=0, drop_last=False, shuffle=False)
 
     test_dataset = OCTDataset(root_path, split_names[2],
                               args.map_df_paths, args.labels_dict,
@@ -324,15 +348,16 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                               use_iipp=False,
                               num_same_area=-1,
                               transforms=img_transforms,
-                              pre_sample=args.dataset_sample)
+                              pre_sample=args.dataset_sample,
+                              seq_split=seq_split)
 
     test_loader = DataLoader(test_dataset, batch_size=batch_size,
-                             num_workers=0, drop_last=False, shuffle=shuffle)
+                             num_workers=0, drop_last=False, shuffle=False)
     return train_loader, valid_loader, test_loader
 
 
-def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, supervised=False, shuffle=False):
-    return get_oct_data_loaders(root_path, args, batch_size, mean, std, True, shuffle)
+def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
+    return get_oct_data_loaders(root_path, args, batch_size, mean, std, True, shuffle, seq_split)
 
 
 def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):
