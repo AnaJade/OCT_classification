@@ -223,16 +223,18 @@ def main():
     # Define model
     model = FullSupervisedModel(args)
 
+    # Update model weights name if sequential split
+    if args.sequential_split:
+        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
+            f"{model.finetune_best_weights_path.stem}_seqSplit.pt")
+        
     # Update labels
     if lbls_to_keep is not None:
         for l in [train_loader, valid_loader, test_loader]:
             l.dataset.map_df = l.dataset.map_df[l.dataset.map_df['label_str'].isin(labels)].copy()
         # Update model weights name
-        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(f"{model.finetune_best_weights_path.name}_{'_'.join(labels)}.pt")
-    # Update model weights name if sequential split
-    if args.sequential_split:
-        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
-            f"{model.finetune_best_weights_path.name}_seqSplit.pt")
+        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(f"{model.finetune_best_weights_path.stem}_{'_'.join(labels)}.pt")
+
 
     # Train weights
     print(f"Train model")
@@ -273,10 +275,14 @@ def main():
     plt.ylabel('True label')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
+    cm_path = f"confusion_matrix.png"
+    if args.sequential_split:
+        cm_path = f"confusion_matrix_seqSplit.png"
     if lbls_to_keep is not None:
         cm_path = f"confusion_matrix_{'_'.join(lbls_to_keep)}.png"
-    else:
-        cm_path = f"confusion_matrix.png"
+        if args.sequential_split:
+            cm_path = f"confusion_matrix_seqSplit_{'_'.join(lbls_to_keep)}.png"
+
     plt.savefig(args.save_folder.joinpath(cm_path))
     plt.show()
 
