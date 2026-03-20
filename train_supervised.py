@@ -228,7 +228,11 @@ def main():
         for l in [train_loader, valid_loader, test_loader]:
             l.dataset.map_df = l.dataset.map_df[l.dataset.map_df['label_str'].isin(labels)].copy()
         # Update model weights name
-        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(f"supervised_best_loss_{'_'.join(labels)}.pt")
+        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(f"{model.finetune_best_weights_path.name}_{'_'.join(labels)}.pt")
+    # Update model weights name if sequential split
+    if args.sequential_split:
+        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
+            f"{model.finetune_best_weights_path.name}_seqSplit.pt")
 
     # Train weights
     print(f"Train model")
