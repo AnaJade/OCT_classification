@@ -5,14 +5,12 @@ from sys import platform
 import re
 import numpy as np
 from addict import Dict
-from oauthlib.uri_validate import path_empty
 from tqdm import tqdm
 import pandas as pd
-import cv2
 
 import utils
-from utils_data import open_mat_file, find_keywords, build_image_root
-from prep_oct_data import save_as_img, get_img_dataset_info, split_train_valid_test, create_mapping_dfs, get_img_mean_std
+from utils_data import build_image_root
+from prep_oct_data import save_as_img, get_img_dataset_info, get_img_mean_std
 
 
 def merge_all_labels(lbl_root_path: pathlib.Path) -> pd.DataFrame:
@@ -227,6 +225,7 @@ def split_clinical_train_valid_test(ds_split: list, jpg_files_info:pd.DataFrame,
 
     return split_per_pat_lbl
 
+
 def create_mapping_dfs_clinical(jpg_root_path: pathlib.Path, df_split:pd.DataFrame, jpg_files_info:pd.DataFrame, ascan_per_group: int, mini_dataset:bool):
     """
     Create the mapping dataframes used by the dataset class
@@ -272,9 +271,11 @@ if __name__ == '__main__':
     configs = utils.load_configs(config_file)
     if platform == "linux" or platform == "linux2":
         dataset_root = pathlib.Path(configs['data']['dataset_root_linux'])
+        target_path = pathlib.Path(r"/data/Boudreault/OCT_clinical_data")
     elif platform == "win32":
         dataset_root = pathlib.Path(configs['data']['dataset_root_windows'])
         dataset_root = pathlib.Path(r"Y:\OCT_clinical_data\OCTData")
+        target_path = pathlib.Path(r"X:\Boudreault\OCT_clinical_data")
     ds_split = configs['data']['ds_split']
     labels = configs['data']['labels']
     ascan_per_group = configs['data']['ascan_per_group']
@@ -291,8 +292,6 @@ if __name__ == '__main__':
         pre_processing['no_noise'] = False  # M-Scans have already been cropped to remove noise
         pre_processing['ascan_sampling'] = 1
         # Set target path
-        target_path = pathlib.Path(r"X:\Boudreault\OCT_clinical_data")
-        # target_path = pathlib.Path(r"/data/Boudreault/OCT_clinical_data")
         img_root_path = target_path.joinpath(build_image_root(ascan_per_group, pre_processing))
         if jpg_files_info_path.exists():
             jpg_files_info = pd.read_csv(jpg_files_info_path)
