@@ -1,6 +1,7 @@
 import argparse
 import pathlib
 import random
+import re
 import sys
 from argparse import Namespace
 import socket
@@ -233,6 +234,32 @@ def main():
     if lbls_to_keep is not None:
         for l in [train_loader, valid_loader, test_loader]:
             l.dataset.map_df = l.dataset.map_df[l.dataset.map_df['label_str'].isin(labels)].copy()
+        # Add extra steps for lamb heart data
+        if lbls_to_keep == ['lamb_heart_muscle', 'lamb_heart_fat']:
+            split_areas = {'train': ["area1", "area2", "area5", "area6"],
+                           'valid': ["area3", "area7"],
+                           'test': ["area4", "area10"],
+                           }
+            # Re-merge mapping dfs
+            map_df = pd.concat([l.dataset.map_df for l in [train_loader, valid_loader, test_loader]], axis=0)
+            map_df.loc[:, 'area_id'] = [int(re.sub(r'[^\d]+', '', a.split('_')[-1])) for a in map_df.loc[:, 'area']]
+
+            # Cut away first 750k and last 200k ascans
+            map_df = pd.merge(map_df, map_df.groupby('trajectory').agg(idx_max=('idx_end', 'max')).reset_index(), on='trajectory', how='left')
+            # Keep only half of the remaining A-scans
+            map_df_a2 = map_df[map_df['area_id'] == 2]
+            map_df_a_other = map_df[map_df['area_id'] != 2]
+            map_df_a_other = map_df_a_other[map_df_a_other['idx_end'] < map_df_a_other['idx_max']/2]
+            map_df = pd.concat([map_df_a2, map_df_a_other], axis=0)
+
+            # Re-split
+            map_df.loc[:, 'split'] = ''
+            for s, a in split_areas.items():
+                map_df.loc[map_df['area'].str.contains('|'.join(a)), 'split'] = s
+
+            for s, l in zip(['train', 'valid', 'test'], [train_loader, valid_loader, test_loader]):
+                l.dataset.map_df = map_df[map_df['split'] == s].reset_index()
+
         # Update model weights name
         model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(f"{model.finetune_best_weights_path.stem}_{'_'.join(labels)}.pt")
 
