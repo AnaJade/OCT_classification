@@ -18,6 +18,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
+from torchvision.transforms import v2
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
@@ -46,7 +47,7 @@ mean['stl10'] = [0.485, 0.456, 0.406]
 # mean['oct'] = [43.51, 43.51, 43.51]
 
 std['cifar10'] = [x / 255 for x in [63.0, 62.1, 66.7]]
-std['cifar100'] = [x / 255 for x in [68.2,  65.4,  70.4]]
+std['cifar100'] = [x / 255 for x in [68.2, 65.4, 70.4]]
 std['stl10'] = [0.229, 0.224, 0.225]
 # std['oct'] = [24.98, 24.98, 24.98]
 
@@ -54,12 +55,12 @@ model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
                      and callable(models.__dict__[name]))
 
-
 # Set up the argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument('--config_path',
                     help='Path to the config file',
                     type=str)
+
 
 class FullSupervisedModel(SupervisedModel):
     def __init__(self, args):
@@ -155,13 +156,13 @@ def main():
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
         args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
         num_cluster_dict['oct'] = len(labels)
-        # lbls_to_keep = None
+        lbls_to_keep = None
         # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside'] # None
         # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_inside']
         # lbls_to_keep = ['chicken_stomach_outside', 'chicken_stomach_inside']
         # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside', 'chicken_stomach_inside']
         # lbls_to_keep = ['lamb_heart_muscle', 'chicken_stomach_inside']
-        lbls_to_keep = ['lamb_heart_muscle', 'lamb_heart_fat']
+        # lbls_to_keep = ['lamb_heart_muscle', 'lamb_heart_fat']
         # lbls_to_keep = ['lamb_heart_fat', 'chicken_stomach_inside']
         # lbls_to_keep = ['lamb_heart_muscle', 'chicken_stomach_outside', 'chicken_stomach_inside']
         # lbls_to_keep = ['chicken_heart_muscle', 'lamb_heart_muscle']
@@ -183,9 +184,11 @@ def main():
     args.out_dim = num_cluster_dict[args.dataset_name]
     args.gpu_index = configs['finetune']['gpu_index']
     args.patience = configs['finetune']['patience']
-    if (platform == "linux" or platform == "linux2") and ('hpc' in socket.gethostname() or 'u00' in socket.gethostname()):
+    if (platform == "linux" or platform == "linux2") and (
+            'hpc' in socket.gethostname() or 'u00' in socket.gethostname()):
         print(f"socket name: {socket.gethostname()}")
-        args.save_folder = pathlib.Path(r'/fibus/fs0/14/cab8351/OCT_classification/supervised').joinpath(f'weights_{args.arch}')
+        args.save_folder = pathlib.Path(r'/fibus/fs0/14/cab8351/OCT_classification/supervised').joinpath(
+            f'weights_{args.arch}')
     else:
         args.save_folder = pathlib.Path().resolve().joinpath('supervised').joinpath(f'weights_{args.arch}')
     if not args.save_folder.is_dir():
@@ -212,7 +215,7 @@ def main():
         #                                                                std=std[args.dataset_name],
         #                                                                shuffle=True,
         #                                                                seq_split=args.sequential_split)
-        train_aug = [transforms.RandomEqualize(p=0.98)]
+        train_aug = [v2.RandomEqualize(p=0.98)]
         train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
                                                                        train_aug=train_aug,
                                                                        mean=mean[args.dataset_name],
@@ -229,13 +232,14 @@ def main():
     if args.sequential_split:
         model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
             f"{model.finetune_best_weights_path.stem}_seqSplit.pt")
-        
+
     # Update labels
     if lbls_to_keep is not None:
         for l in [train_loader, valid_loader, test_loader]:
             l.dataset.map_df = l.dataset.map_df[l.dataset.map_df['label_str'].isin(labels)].copy()
         # Add extra steps for lamb heart data
         if lbls_to_keep == ['lamb_heart_muscle', 'lamb_heart_fat']:
+            print("Re-splitting areas for lamb classes")
             split_areas = {'train': ["area1", "area2", "area5", "area6"],
                            'valid': ["area3", "area7"],
                            'test': ["area4", "area10"],
@@ -245,11 +249,12 @@ def main():
             map_df.loc[:, 'area_id'] = [int(re.sub(r'[^\d]+', '', a.split('_')[-1])) for a in map_df.loc[:, 'area']]
 
             # Cut away first 750k and last 200k ascans
-            map_df = pd.merge(map_df, map_df.groupby('trajectory').agg(idx_max=('idx_end', 'max')).reset_index(), on='trajectory', how='left')
+            map_df = pd.merge(map_df, map_df.groupby('trajectory').agg(idx_max=('idx_end', 'max')).reset_index(),
+                              on='trajectory', how='left')
             # Keep only half of the remaining A-scans
             map_df_a2 = map_df[map_df['area_id'] == 2]
             map_df_a_other = map_df[map_df['area_id'] != 2]
-            map_df_a_other = map_df_a_other[map_df_a_other['idx_end'] < map_df_a_other['idx_max']/2]
+            map_df_a_other = map_df_a_other[map_df_a_other['idx_end'] < map_df_a_other['idx_max'] / 2]
             map_df = pd.concat([map_df_a2, map_df_a_other], axis=0)
 
             # Re-split
@@ -260,9 +265,13 @@ def main():
             for s, l in zip(['train', 'valid', 'test'], [train_loader, valid_loader, test_loader]):
                 l.dataset.map_df = map_df[map_df['split'] == s].reset_index()
 
-        # Update model weights name
-        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(f"{model.finetune_best_weights_path.stem}_{'_'.join(labels)}.pt")
+            print(f"Areas in train: {train_loader.dataset.map_df['area'].unique()}")
+            print(f"Areas in valid: {valid_loader.dataset.map_df['area'].unique()}")
+            print(f"Areas in test: {test_loader.dataset.map_df['area'].unique()}")
 
+        # Update model weights name
+        model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
+            f"{model.finetune_best_weights_path.stem}_{'_'.join(labels)}.pt")
 
     # Train weights
     print(f"Train model")
@@ -276,7 +285,8 @@ def main():
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
     opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
     scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
-    model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt, scheduler=scheduler)
+    model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt,
+                   scheduler=scheduler)
 
     # Get test set performance
     test_logits, test_oh_labels = model.test(test_loader)

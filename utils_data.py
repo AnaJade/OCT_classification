@@ -305,10 +305,10 @@ class OCTDataset(Dataset): # Used in train_moco
 
 
 def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
-    img_transforms = [transforms.ToTensor(),
-                      transforms.Resize((args.img_reshape, args.img_reshape), interpolation=InterpolationMode.BILINEAR),
-                      transforms.Normalize(mean=mean,
-                                           std=std)]
+    img_transforms = [v2.ToTensor(),
+                      v2.Resize((args.img_reshape, args.img_reshape), interpolation=InterpolationMode.BILINEAR),
+                      v2.Normalize(mean=mean,std=std)
+    ]
     if args.img_channel == 1:
         img_transforms.append(transforms.Grayscale())
     split_names = ['train', 'valid', 'test']
@@ -333,7 +333,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                                sample_within_image=args.sample_within_image,
                                use_iipp=False,  # args.use_iipp,
                                num_same_area=-1,
-                               transforms=transforms.Compose(img_transforms),
+                               transforms=transforms.Compose(train_aug + img_transforms),
                                pre_sample=args.dataset_sample,
                                seq_split=seq_split)
 
@@ -346,7 +346,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                               sample_within_image=args.sample_within_image,
                               use_iipp=False,
                               num_same_area=-1,
-                              transforms=transforms.Compose(img_transforms),
+                              transforms=transforms.Compose(train_aug + img_transforms),
                               pre_sample=args.dataset_sample,
                               seq_split=seq_split)
 
