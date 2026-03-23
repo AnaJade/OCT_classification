@@ -102,7 +102,7 @@ class SupervisedModel(object):
             self.model = utils.set_classifier_head_SimCLR(self.model, num_outputs)
         self.model.to(args.device)
 
-    def finetune(self, train_loader, valid_loader, criterion, opt):
+    def finetune(self, train_loader, valid_loader, criterion, opt, scheduler=None):
         best_epoch = 0
         best_valid_loss = 1e6
         for epoch in range(self.args.epochs):
@@ -127,6 +127,8 @@ class SupervisedModel(object):
                 batch_loss.backward()
                 opt.step()
                 avg_epoch_train_loss.append(batch_loss)
+            if scheduler is not None:
+                scheduler.step()
             avg_epoch_train_loss = float(torch.mean(torch.stack(avg_epoch_train_loss)).cpu().detach().numpy())
             print(f"Average epoch train loss: {avg_epoch_train_loss}")
 

@@ -154,13 +154,13 @@ def main():
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
         args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
         num_cluster_dict['oct'] = len(labels)
-        lbls_to_keep = None
+        # lbls_to_keep = None
         # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside'] # None
         # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_inside']
         # lbls_to_keep = ['chicken_stomach_outside', 'chicken_stomach_inside']
         # lbls_to_keep = ['chicken_heart_muscle', 'chicken_stomach_outside', 'chicken_stomach_inside']
         # lbls_to_keep = ['lamb_heart_muscle', 'chicken_stomach_inside']
-        # lbls_to_keep = ['lamb_heart_muscle', 'lamb_heart_fat']
+        lbls_to_keep = ['lamb_heart_muscle', 'lamb_heart_fat']
         # lbls_to_keep = ['lamb_heart_fat', 'chicken_stomach_inside']
         # lbls_to_keep = ['lamb_heart_muscle', 'chicken_stomach_outside', 'chicken_stomach_inside']
         # lbls_to_keep = ['chicken_heart_muscle', 'lamb_heart_muscle']
@@ -168,7 +168,6 @@ def main():
         labels = lbls_to_keep
         args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
         num_cluster_dict['oct'] = len(labels)
-
 
     # Training params
     args.seed = configs['training']['random_seed']
@@ -212,7 +211,9 @@ def main():
         #                                                                std=std[args.dataset_name],
         #                                                                shuffle=True,
         #                                                                seq_split=args.sequential_split)
+        train_aug = [transforms.RandomEqualize(p=0.98)]
         train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
+                                                                       train_aug=train_aug,
                                                                        mean=mean[args.dataset_name],
                                                                        std=std[args.dataset_name],
                                                                        shuffle=True,
@@ -246,8 +247,9 @@ def main():
         pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
             args.device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
-    opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr)
-    model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt)
+    opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
+    scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
+    model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt, scheduler=scheduler)
 
     # Get test set performance
     test_logits, test_oh_labels = model.test(test_loader)

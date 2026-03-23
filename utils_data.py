@@ -35,7 +35,7 @@ torchvision.disable_beta_transforms_warning()
 from torchvision.io import read_image
 from torchvision import datasets
 from torchvision import transforms
-from torchvision.transforms import v2
+from torchvision.transforms import v2, InterpolationMode
 
 import utils
 
@@ -304,14 +304,13 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df_sampling.loc[:, 'weights'] = 1
 
 
-def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
+def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
     img_transforms = [transforms.ToTensor(),
-                      transforms.Resize((args.img_reshape, args.img_reshape)),
+                      transforms.Resize((args.img_reshape, args.img_reshape), interpolation=InterpolationMode.BILINEAR),
                       transforms.Normalize(mean=mean,
                                            std=std)]
     if args.img_channel == 1:
         img_transforms.append(transforms.Grayscale())
-    img_transforms = transforms.Compose(img_transforms)
     split_names = ['train', 'valid', 'test']
     if args.dataset_name == 'oct' and supervised:
         split_names = [f'{s}_supervised' for s in split_names]
@@ -321,7 +320,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                                sample_within_image=args.sample_within_image,
                                use_iipp=False, # args.use_iipp,
                                num_same_area=-1,
-                               transforms=img_transforms,
+                               transforms=transforms.Compose(train_aug + img_transforms),
                                pre_sample=args.dataset_sample,
                                seq_split=seq_split)
 
@@ -334,7 +333,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                                sample_within_image=args.sample_within_image,
                                use_iipp=False,  # args.use_iipp,
                                num_same_area=-1,
-                               transforms=img_transforms,
+                               transforms=transforms.Compose(img_transforms),
                                pre_sample=args.dataset_sample,
                                seq_split=seq_split)
 
@@ -347,7 +346,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                               sample_within_image=args.sample_within_image,
                               use_iipp=False,
                               num_same_area=-1,
-                              transforms=img_transforms,
+                              transforms=transforms.Compose(img_transforms),
                               pre_sample=args.dataset_sample,
                               seq_split=seq_split)
 
@@ -356,8 +355,8 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
     return train_loader, valid_loader, test_loader
 
 
-def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
-    return get_oct_data_loaders(root_path, args, batch_size, mean, std, True, shuffle, seq_split)
+def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, aug: list, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
+    return get_oct_data_loaders(root_path, args, batch_size, aug, mean, std, True, shuffle, seq_split)
 
 
 def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):
