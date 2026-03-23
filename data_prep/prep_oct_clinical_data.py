@@ -5,6 +5,7 @@ from sys import platform
 import re
 import numpy as np
 from addict import Dict
+from oauthlib.uri_validate import path_empty
 from tqdm import tqdm
 import pandas as pd
 import cv2
@@ -69,18 +70,23 @@ def split_clinical_train_valid_test(ds_split: list, jpg_files_info:pd.DataFrame,
     :param labels: list of possible labels
     :return: df assigning each area to a subset, including history of assignments over the iterations
     """
-    file_stats = jpg_files_info[['trajectory', 'folder', 'idx_end']].groupby('trajectory').last().rename(
-        columns={'idx_end': 'col_count'})
 
-    # Count columns per folder
-    folder_stats = file_stats.reset_index(drop=True).groupby('folder').sum()
+    # Add patient id and trajectory info
+    jpg_files_info.loc[:, 'img_relative_path'] = [pathlib.Path(p) for p in jpg_files_info['img_relative_path']]
+    jpg_files_info.loc[:, 'pat'] = [int(re.sub(r'[^\d]+', '', p.stem.split('_')[0])) for p in
+                            jpg_files_info.loc[:, 'img_relative_path']]
+    jpg_files_info.loc[:, 'trajectory'] = ['_'.join(p.stem.split('_')[:-3]) for p in jpg_files_info.loc[:, 'img_relative_path']]
+    # Get A-scan count per patient per label
+    folder_stats = jpg_files_info.groupby(['pat', 'label', 'trajectory']).agg(col_count=('idx_end', 'max')).reset_index()
+    folder_stats = folder_stats.groupby(['pat', 'label']).agg(col_count=('col_count', 'sum')).reset_index()
 
-    # Add label to folder stats
-    mscan_count_per_pat = jpg_files_info.groupby(['folder', 'trajectory', 'label']).agg(
-        mscan_count=('idx_end', 'max')).reset_index()
-    mscan_count_per_pat_lbl = mscan_count_per_pat.groupby(['folder', 'label']).agg({'mscan_count': 'sum'}).reset_index()
-    lbl_stats = mscan_count_per_pat_lbl.groupby(['folder'])['label'].apply(lambda x: ', '.join(x)).rename('label')
-    folder_stats = pd.merge(folder_stats, lbl_stats, left_index=True, right_index=True, how='left')
+    # Get stats per patient
+    lbls_per_pat = folder_stats.groupby('pat').agg(lbl_count=('label', 'count'), col_count=('col_count', 'sum')).reset_index()
+    lbl_stats = folder_stats.groupby(['pat'])['label'].apply(lambda x: ', '.join(x)).rename('label').reset_index()
+    folder_stats = pd.merge(lbls_per_pat, lbl_stats, on='pat', how='left')
+    pat_1lbl = folder_stats[folder_stats['lbl_count'] == 1].copy() # Reserve patients with 1 lbl for the end
+    pat_1lbl.loc[:, 'split'] = ''
+    folder_stats = folder_stats[folder_stats['lbl_count'] == 2].copy()
     labels = folder_stats['label'].unique().tolist()
     folder_stats_split = {l: folder_stats[folder_stats['label'] == l].copy() for l in labels}
 
@@ -166,22 +172,85 @@ def split_clinical_train_valid_test(ds_split: list, jpg_files_info:pd.DataFrame,
 
         # Prepare for next iteration
         i = i + 1
+
+    df_split.to_excel('df_split_clinical_dbg.xlsx')
     # Add resulting percentage split
     disp_err_state = err_state.copy().drop(columns=['abs_err', 'min_change_possible', 'change_possible'])
     # df_split_final = df_split[[c for i, c in enumerate(df_split.columns) if i in [0, 1, len(df_split.columns)-1]]]  # Keep only final split column
     disp_err_state = pd.merge(disp_err_state, df_split.groupby(f'split{i - 1}').agg(col_count=('col_count', 'sum')),
                               left_index=True, right_index=True)
     disp_err_state['split_ratio'] = disp_err_state['col_count'] / disp_err_state['col_count'].sum()
-    print("Done splitting into subsets")
+
+    print("Done splitting 2 lbl patients into subsets.")
     print("Minimum A-Scan count error (target - current): ")
     print(disp_err_state)
-    print("\n")
+    print("Adding patients with 1 lbl...")
+
     # Rename last split column to split
     df_split = df_split.rename(columns={f'split{i - 1}': 'split'})
-    df_split.to_excel('df_split_dbg.xlsx')
+    # Re-add 1 lbl patients to the split
+    split_per_pat_lbl = jpg_files_info.groupby(['pat', 'label', 'trajectory']).agg(
+        col_count=('idx_end', 'max')).reset_index().groupby(['pat', 'label']).agg(
+        col_count=('col_count', 'sum')).reset_index()
+    split_per_pat_lbl = pd.merge(split_per_pat_lbl, df_split[['pat', 'split']], on='pat', how='left')
+    # Sort 2 lbl pat split by number of missing cols
+    pat_2lbl_stats = split_per_pat_lbl.groupby(['split', 'label']).agg(col_count=('col_count', 'sum')).reset_index()
+    pat_2lbl_stats = pd.merge(pat_2lbl_stats, pat_2lbl_stats.groupby('split').agg(sum_col_split=('col_count', 'sum')).reset_index(), on='split', how='left')
+    pat_2lbl_stats.loc[:, 'target_split'] = [{s: r for s, r in zip(['train', 'valid', 'test'], ds_split)}[sp]*pat_2lbl_stats['col_count'].sum() for sp in pat_2lbl_stats['split']]
+    pat_2lbl_stats.loc[:,'target_lbl'] = pat_2lbl_stats['target_split']/2
+    pat_2lbl_stats.loc[:, 'diff_lbl'] = pat_2lbl_stats['col_count'] - pat_2lbl_stats['target_lbl']
+    pat_2lbl_stats = pat_2lbl_stats.sort_values(by='diff_lbl', ascending=True).reset_index(drop=True)
+    # Add 1 lbl patients based on order
+    pat_1lbl = pat_1lbl.sort_values('col_count', ascending=False)
+    for pat in pat_1lbl['pat']:
+        # Get pat label
+        pat_lbl = pat_1lbl.loc[pat_1lbl['pat'] == pat, 'label'].iloc[0]
+        # Find receiving split
+        rec_split = pat_2lbl_stats.loc[pat_2lbl_stats['label'] == pat_lbl, 'split'].iloc[0]
+        # Update split
+        split_per_pat_lbl.loc[split_per_pat_lbl['pat'] == pat, 'split'] = rec_split
+        # Update pat_2lbl_stats
+        pat_2lbl_stats.loc[(pat_2lbl_stats['label'] == pat_lbl) & (pat_2lbl_stats['split'] == rec_split), 'diff_lbl'] = \
+        pat_2lbl_stats.loc[(pat_2lbl_stats['label'] == pat_lbl) & (pat_2lbl_stats['split'] == rec_split), 'diff_lbl'].iloc[0] + \
+        split_per_pat_lbl.loc[split_per_pat_lbl['pat'] == pat, 'col_count'].iloc[0]
+        pat_2lbl_stats = pat_2lbl_stats.sort_values(by='diff_lbl', ascending=True).reset_index(drop=True)
 
-    return df_split
+    # Get update error df
+    print(f"Error after adding 1 lbl patients:")
+    df_err = split_per_pat_lbl.groupby(['split', 'label']).agg(col_count=('col_count', 'sum')).reset_index()
+    df_err = pd.merge(df_err, df_err.groupby('split').agg(sum_col_split=('col_count', 'sum')).reset_index(), on='split', how='left')
+    df_err.loc[:, 'target_split'] = [{s: r for s, r in zip(['train', 'valid', 'test'], ds_split)}[sp] * df_err['col_count'].sum() for sp in df_err['split']]
+    df_err.loc[:, 'target_lbl'] = df_err['target_split'] / 2
+    df_err.loc[:, 'diff_lbl'] = df_err['col_count'] - df_err['target_lbl']
+    df_err.loc[:, 'split_ratio'] = df_err['sum_col_split']/df_err['col_count'].sum()
+    print(df_err[['split', 'label', 'diff_lbl', 'col_count', 'split_ratio']])
 
+    return split_per_pat_lbl
+
+def create_mapping_dfs_clinical(jpg_root_path: pathlib.Path, df_split:pd.DataFrame, jpg_files_info:pd.DataFrame, ascan_per_group: int, mini_dataset:bool):
+    """
+    Create the mapping dataframes used by the dataset class
+    :param jpg_root_path: Directory holding the jpg images
+    :param df_split: df assigning each area to a subset (output of split_train_valid_test)
+    :param jpg_files_info: df with the relative path, label, idx_start and idx_end of each available jpg image. Output of get_jpg_dataset_info
+    :param ascan_per_group: number of A-scans within each grouped image
+    :param mini_dataset: if true, only s8 scans will be converted to jpg
+    :return:
+    """
+    # Create map df
+    print("Creating the mapping dataframes...")
+    sub_sets = df_split['split'].unique().tolist()
+    cols_to_keep = ['img_relative_path', 'label', 'idx_start', 'idx_end']
+
+    for split in sub_sets:
+        traj_in_split = df_split[df_split['split'] == split]
+        df_map_split = jpg_files_info[jpg_files_info['pat'].isin(traj_in_split['pat'])][cols_to_keep].reset_index(drop=True)
+        df_map_split.loc[:, 'subset'] = split
+
+        # Save to csv
+        map_df_path = f"{split}{'Mini' if mini_dataset else ''}_mapping_{ascan_per_group}scans.csv"
+        print(f"Saving {split} mapping as {map_df_path}...")
+        df_map_split.to_csv(jpg_root_path.joinpath(map_df_path), index=False)
 
 
 if __name__ == '__main__':
@@ -214,27 +283,32 @@ if __name__ == '__main__':
 
     # Update labels if clinical data is used
     if 'clinical' in dataset_root.__str__():
+        jpg_files_info_path = pathlib.Path('clinical_jpg_files_info.csv')
         lbl_root_path = dataset_root.parent.joinpath('Labels')
         merged_labels = merge_all_labels(lbl_root_path)
         labels = merged_labels['Label'].unique().tolist()
         # Update settings
-        pre_processing['no_noise'] = False # M-Scans have already been cropped to remove noise
+        pre_processing['no_noise'] = False  # M-Scans have already been cropped to remove noise
         pre_processing['ascan_sampling'] = 1
         # Set target path
         target_path = pathlib.Path(r"X:\Boudreault\OCT_clinical_data")
         # target_path = pathlib.Path(r"/data/Boudreault/OCT_clinical_data")
         img_root_path = target_path.joinpath(build_image_root(ascan_per_group, pre_processing))
-        # Get jpg file info
-        jpg_files_info = get_clinical_img_dataset_info(target_path, img_root_path, merged_labels)
-        # Filter for corrected labels
-        traj_to_remove = ['pat01_vc_re_run1',
-                          'pat04_vc_le_run1',
-                          'pat04_vc_le_run3',
-                          'pat04_vc_re_run2', # TODO: confirm if re was meant instead of le
-                          'pat06_vc_re_run1',
-                          'pat07_vc_re_run1',
-                          'pat15_vc_le_run1']
-        jpg_files_info = jpg_files_info[~jpg_files_info['trajectory'].str.contains('|'.join(f'{f}_' for f in traj_to_remove))].copy()
+        if jpg_files_info_path.exists():
+            jpg_files_info = pd.read_csv(jpg_files_info_path)
+        else:
+            # Get jpg file info
+            jpg_files_info = get_clinical_img_dataset_info(target_path, img_root_path, merged_labels)
+            # Filter for corrected labels
+            traj_to_remove = ['pat01_vc_re_run1',
+                              'pat04_vc_le_run1',
+                              'pat04_vc_le_run3',
+                              'pat04_vc_re_run2',
+                              'pat06_vc_re_run1',
+                              'pat07_vc_re_run1',
+                              'pat15_vc_le_run1']
+            jpg_files_info = jpg_files_info[~jpg_files_info['trajectory'].str.contains('|'.join(f'{f}_' for f in traj_to_remove))].reset_index(drop=True).copy()
+            jpg_files_info.to_csv(jpg_files_info_path, index=False)
 
     else:
         # target_path = pathlib.Path(r"C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data")
@@ -254,7 +328,7 @@ if __name__ == '__main__':
     df_split = split_clinical_train_valid_test(ds_split, jpg_files_info, labels)
 
     # Save mapping dfs
-    create_mapping_dfs(img_root_path, df_split, jpg_files_info, ascan_per_group, use_mini_dataset)
+    create_mapping_dfs_clinical(img_root_path, df_split, jpg_files_info, ascan_per_group, use_mini_dataset)
 
     # Get mean and std of train set
     print("Calculating the mean and std of training images...")
