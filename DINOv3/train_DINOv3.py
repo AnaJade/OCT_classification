@@ -78,7 +78,7 @@ if __name__ == "__main__":
     labels = configs['data']['labels']
     trajectories = configs['data']['trajectories']
     ascan_per_group = configs['data']['ascan_per_group']
-    overwrite_labels = configs['data']['overwrite_labels']
+    overwrite_labels_path = pathlib.Path(configs['data']['overwrite_labels'])
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
     args.dataset_name = configs['DINO']['dataset_name']
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     image_root = build_image_root(ascan_per_group, pre_processing)
     print(f"dataset image root: {args.data.joinpath(image_root)}")
     args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
-    new_lbl_str = 'newLbls_' if overwrite_labels is not None else ''
+    new_lbl_str = f'{overwrite_labels_path.stem}_' if overwrite_labels_path is not None else ''
     traj_str = f"{''.join([t.capitalize() for t in trajectories])}_" if len(trajectories) < 3 else ''
     args.map_df_paths = {
         split: args.data.joinpath(image_root).joinpath(
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     else:
         args.img_size = 512  # BYOL requires square images, so all images will be reshaped to 512x512
     args.ascan_per_group = ascan_per_group
-    if overwrite_labels is not None:
+    if (args.dataset_name == 'oct') and (overwrite_labels_path is not None):
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
         args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
         num_cluster_dict['oct'] = len(labels)
@@ -196,79 +196,79 @@ if __name__ == "__main__":
                                                                    std=std[args.dataset_name],
                                                                    shuffle=False)
 
-with torch.cuda.device(args.gpu_index):
-        # feature_model, feature_layer = get_backbone(args.arch, args.use_pretrained)
-        # feature_model = timm.create_model('convnext_tiny.dinov3_lvd1689m',
-        #                               pretrained=True,
-        #                               num_classes=0)
-        # DEBUG
-        # Find where dino matches convnextt
-        # convnextt = models.convnext_tiny(weights='DEFAULT')
-        # children_convnextt = [*convnextt.children()]
-        # children_dino_convnext = [*feature_model.children()]
-        # modules_convnextt = dict([*convnextt.named_modules()])
-        # modules_dino = dict([*feature_model.named_modules()])
+    with torch.cuda.device(args.gpu_index):
+            # feature_model, feature_layer = get_backbone(args.arch, args.use_pretrained)
+            # feature_model = timm.create_model('convnext_tiny.dinov3_lvd1689m',
+            #                               pretrained=True,
+            #                               num_classes=0)
+            # DEBUG
+            # Find where dino matches convnextt
+            # convnextt = models.convnext_tiny(weights='DEFAULT')
+            # children_convnextt = [*convnextt.children()]
+            # children_dino_convnext = [*feature_model.children()]
+            # modules_convnextt = dict([*convnextt.named_modules()])
+            # modules_dino = dict([*feature_model.named_modules()])
 
-        # vit-s
-        # dino_vit = timm.create_model('vit_small_patch16_dinov3.lvd1689m', pretrained=True)
-        # vitb = models.vit_b_16(weights='DEFAULT')
-        # children_vitb = [*vitb.children()]
-        # children_dino_vitb = [*dino_vit.children()]
-        # modules_vitb = dict([*vitb.named_modules()])
-        # modules_dino_vitb = dict([*dino_vit.named_modules()])
+            # vit-s
+            # dino_vit = timm.create_model('vit_small_patch16_dinov3.lvd1689m', pretrained=True)
+            # vitb = models.vit_b_16(weights='DEFAULT')
+            # children_vitb = [*vitb.children()]
+            # children_dino_vitb = [*dino_vit.children()]
+            # modules_vitb = dict([*vitb.named_modules()])
+            # modules_dino_vitb = dict([*dino_vit.named_modules()])
 
 
-        # Change first layer to take grayscale image
-        # if args.img_channel == 1:
-        #     # feature_model = utils.update_backbone_channel(feature_model, args.img_channel)
-        #     pass
+            # Change first layer to take grayscale image
+            # if args.img_channel == 1:
+            #     # feature_model = utils.update_backbone_channel(feature_model, args.img_channel)
+            #     pass
 
-        # Augmentations (from iipp paper, sec 3.3.1):
-        #   vertical_flip(p=0.3), due to some scans being flipped because the probe was too close
-        #   brightness(p=0.8)
-        #   contrast(p=0.8, max_rel_change=0.4)
-        #   rotate(p=0.5, max_angle=8deg)
-        #   crop_centrally(p=0.5, res=188x236)
-        #   hori_flip(p=0.5)
-        #   random_crop(scale=[0.25, 1], aspect_ratio=[3/4, 4/3]
-        #   resize(192x192)
-        # No gaussian blur, hue, saturation and colour droppings
-        # aug = [transforms.RandomApply([transforms.RandomVerticalFlip()], p=0.3), # Used to counter flipped scans
-        #        transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),
-        #        transforms.RandomApply([transforms.RandomRotation(degrees=8),
-        #                                # transforms.CenterCrop(size=(188, 236)), # Used in the paper, but not really applicable here
-        #                                transforms.RandomHorizontalFlip()], p=0.5),
-        #        ]
-        # aug = transforms.Compose(aug)
+            # Augmentations (from iipp paper, sec 3.3.1):
+            #   vertical_flip(p=0.3), due to some scans being flipped because the probe was too close
+            #   brightness(p=0.8)
+            #   contrast(p=0.8, max_rel_change=0.4)
+            #   rotate(p=0.5, max_angle=8deg)
+            #   crop_centrally(p=0.5, res=188x236)
+            #   hori_flip(p=0.5)
+            #   random_crop(scale=[0.25, 1], aspect_ratio=[3/4, 4/3]
+            #   resize(192x192)
+            # No gaussian blur, hue, saturation and colour droppings
+            # aug = [transforms.RandomApply([transforms.RandomVerticalFlip()], p=0.3), # Used to counter flipped scans
+            #        transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),
+            #        transforms.RandomApply([transforms.RandomRotation(degrees=8),
+            #                                # transforms.CenterCrop(size=(188, 236)), # Used in the paper, but not really applicable here
+            #                                transforms.RandomHorizontalFlip()], p=0.5),
+            #        ]
+            # aug = transforms.Compose(aug)
 
-        # Define model
-        learner = DINO_LoRA(args, None, None)
+            # Define model
+            learner = DINO_LoRA(args, None, None)
 
-        # Train linear layer and LoRA
-        pos_weights = None
-        if args.dataset_name == 'oct_clinical':
-            # Define pos_weights
-            # https://www.codegenes.net/blog/pytorch-bcewithlogitsloss-pos_weight/#handling-class-imbalance
-            class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
-            pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(args.device)
-        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
-        opt = torch.optim.AdamW(learner.parameters(), lr=args.lr, weight_decay=0.1) # , eps=6e-5)
-        learner.train(train_loader, valid_loader, criterion, opt, wandb_log, project_name)
+            # Train linear layer and LoRA
+            pos_weights = None
+            if args.dataset_name == 'oct_clinical':
+                # Define pos_weights
+                # https://www.codegenes.net/blog/pytorch-bcewithlogitsloss-pos_weight/#handling-class-imbalance
+                class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
+                pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(args.device)
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+            opt = torch.optim.AdamW(learner.parameters(), lr=args.lr, weight_decay=0.1) # , eps=6e-5)
+            learner.train(train_loader, valid_loader, criterion, opt, wandb_log, project_name)
 
-        # Get test set performance
-        test_logits, test_oh_labels = learner.test(test_loader)
-        # Convert from logits to predictions
-        if len(labels) > 2:
-            test_probs = F.softmax(test_logits, dim=1)
-            test_preds = torch.argmax(test_probs, dim=1)
-            test_labels = torch.argmax(test_oh_labels, dim=1)
-        else:
-            test_probs = F.sigmoid(test_logits)
-            test_preds = test_probs > 0.5
-            test_labels = test_oh_labels
+            # Get test set performance
+            test_logits, test_oh_labels = learner.test(test_loader)
+            # Convert from logits to predictions
+            if len(labels) > 2:
+                test_probs = F.softmax(test_logits, dim=1)
+                test_preds = torch.argmax(test_probs, dim=1)
+                test_labels = torch.argmax(test_oh_labels, dim=1)
+            else:
+                test_probs = F.sigmoid(test_logits)
+                test_preds = test_probs > 0.5
+                test_labels = test_oh_labels
 
-        # Calculate metrics
-        print(f"Test set results using {args.arch} backbone:")
-        report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
-        print(report)
+            # Calculate metrics
+            print(f"Test set results using {args.arch} backbone:")
+            report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
+            print(report)
 

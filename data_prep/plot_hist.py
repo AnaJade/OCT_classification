@@ -83,7 +83,7 @@ if __name__ == "__main__":
     ascan_per_group = configs['data']['ascan_per_group']
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
-    overwrite_labels = configs['data']['overwrite_labels']
+    overwrite_labels_path = pathlib.Path(configs['data']['overwrite_labels'])
     mean['oct'] = 3 * [configs['data']['img_mean'] / 255]
     std['oct'] = 3 * [configs['data']['img_std'] / 255]
     img_size_dict['oct'] = (512, ascan_per_group)
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     image_root = build_image_root(ascan_per_group, pre_processing)
     print(f"dataset image root: {args.data.joinpath(image_root)}")
     args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
-    new_lbl_str = 'newLbls_' if overwrite_labels is not None else ''
+    new_lbl_str = f'{overwrite_labels_path.stem}_' if overwrite_labels_path is not None else ''
     traj_str = f"{''.join([t.capitalize() for t in trajectories])}_" if len(trajectories) < 3 else ''
     args.map_df_paths = {
         split: args.data.joinpath(image_root).joinpath(

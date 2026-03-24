@@ -77,7 +77,7 @@ if __name__ == "__main__":
     ascan_per_group = configs['data']['ascan_per_group']
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
-    overwrite_labels = configs['data']['overwrite_labels']
+    overwrite_labels_path = pathlib.Path(configs['data']['overwrite_labels'])
 
     ### Convert config file values to the args variable equivalent (match the format of the existing code)
     print("Assigning config values to corresponding args variables...")
