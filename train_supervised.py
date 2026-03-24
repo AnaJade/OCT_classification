@@ -210,12 +210,14 @@ def main():
 
     # Create train and test sets
     if 'oct' in args.dataset_name:
+        train_aug = [v2.RandomEqualize(p=0.98)]
         # train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
+        #                                                                train_aug=train_aug,
         #                                                                mean=mean[args.dataset_name],
         #                                                                std=std[args.dataset_name],
         #                                                                shuffle=True,
         #                                                                seq_split=args.sequential_split)
-        train_aug = [v2.RandomEqualize(p=0.98)]
+
         train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
                                                                        train_aug=train_aug,
                                                                        mean=mean[args.dataset_name],

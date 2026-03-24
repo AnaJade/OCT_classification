@@ -355,8 +355,8 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
     return train_loader, valid_loader, test_loader
 
 
-def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, aug: list, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
-    return get_oct_data_loaders(root_path, args, batch_size, aug, mean, std, True, shuffle, seq_split)
+def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
+    return get_oct_data_loaders(root_path, args, batch_size, train_aug, mean, std, True, shuffle, seq_split)
 
 
 def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):

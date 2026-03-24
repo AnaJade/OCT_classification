@@ -13,7 +13,7 @@ data:
     # - line
     - sine
   ascan_per_group: 512 # Baseline: 512
-  overwrite_labels: Classes.xlsx
+  overwrite_labels: Classes2.xlsx
   pre_processing:
     no_noise: True # Baseline: True
     use_movmean: False

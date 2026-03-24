@@ -284,7 +284,7 @@ def split_train_valid_test(ds_split: list, jpg_files_info:pd.DataFrame, labels: 
     return df_split
 
 
-def create_mapping_dfs(jpg_root_path: pathlib.Path, df_split:pd.DataFrame, jpg_files_info:pd.DataFrame, ascan_per_group: int, mini_dataset:bool):
+def create_mapping_dfs(jpg_root_path: pathlib.Path, df_split:pd.DataFrame, jpg_files_info:pd.DataFrame, ascan_per_group: int, mini_dataset:bool, overwrite_labels_path=None):
     """
     Create the mapping dataframes used by the dataset class
     :param jpg_root_path: Directory holding the jpg images
@@ -298,7 +298,7 @@ def create_mapping_dfs(jpg_root_path: pathlib.Path, df_split:pd.DataFrame, jpg_f
     print("Creating the mapping dataframes...")
     sub_sets = df_split['split'].unique().tolist()
     if 'old_label' in jpg_files_info.columns:
-        new_lbl_str = 'newLbls_'
+        new_lbl_str = f"{overwrite_labels_path.stem}_"
         cols_to_keep = ['img_relative_path', 'label', 'old_label', 'idx_start', 'idx_end']
     else:
         new_lbl_str = ''
@@ -374,7 +374,7 @@ if __name__ == '__main__':
     labels = configs['data']['labels']
     trajectories = configs['data']['trajectories']
     ascan_per_group = configs['data']['ascan_per_group']
-    overwrite_labels = configs['data']['overwrite_labels']
+    overwrite_labels_path = pathlib.Path(configs['data']['overwrite_labels'])
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
 
@@ -405,13 +405,13 @@ if __name__ == '__main__':
         jpg_files_info = jpg_files_info[jpg_files_info['traj_type'].isin(trajectories)].copy()
 
     # Update labels
-    if overwrite_labels is not None:
+    if overwrite_labels_path is not None:
         print(f"Overwriting labels, and removing extra images...")
-        overwrite_labels = pd.read_excel(target_path.joinpath(overwrite_labels))
+        overwrite_labels = pd.read_excel(target_path.joinpath(overwrite_labels_path))
         jpg_files_info = update_labels(jpg_files_info, overwrite_labels)
         labels = jpg_files_info['label'].unique()
         print(f"New labels: {labels}")
-        # Split into train-valid-test
+        # Split into train-valid-test per area based on col_count
         df_split = jpg_files_info.groupby(['label', 'area']).agg(col_count=('img_relative_path', 'count')).reset_index()
         df_split.loc[:, 'col_count'] = df_split['col_count']*ascan_per_group
         df_split = df_split.sort_values(by=['label', 'col_count'], ascending=[True, False])
@@ -425,7 +425,7 @@ if __name__ == '__main__':
         df_split = split_train_valid_test(ds_split, jpg_files_info, labels)
 
     # Save mapping dfs
-    create_mapping_dfs(img_root_path, df_split, jpg_files_info, ascan_per_group, use_mini_dataset)
+    create_mapping_dfs(img_root_path, df_split, jpg_files_info, ascan_per_group, use_mini_dataset, overwrite_labels_path)
 
     # Get mean and std of train set
     print("Calculating the mean and std of training images...")
