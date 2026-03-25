@@ -7,21 +7,21 @@ data:
     - chicken_stomach
     - lamb_heart
     - lamb_testicle
-    # - lamb_liver
+    - lamb_liver
   trajectories:
     # - jitter
     # - line
     - sine
   ascan_per_group: 512 # Baseline: 512
-  overwrite_labels: Classes2.xlsx
+  overwrite_labels: Classes3.xlsx
   pre_processing:
     no_noise: True # Baseline: True
     use_movmean: False
     use_speckle: False
     ascan_sampling: 20 # Baseline: 20, Set to 1 for no sampling
   use_mini_dataset: False  # Use only files with speed 8 to limit data storage size
-  img_mean: 179.131 # Mini: 179.130, Full: 179.131
-  img_std: 21.1 # Mini: 21.09, Full: 21.10
+  img_mean: 179.131 # Mini: 179.130, Full: 179.131, Classes2: 179.150
+  img_std: 21.1 # Mini: 21.09, Full: 21.10, Classes2: 20.9
 training:
   random_seed: 2625233
 SimCLR:

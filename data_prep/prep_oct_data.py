@@ -411,15 +411,45 @@ if __name__ == '__main__':
         jpg_files_info = update_labels(jpg_files_info, overwrite_labels)
         labels = jpg_files_info['label'].unique()
         print(f"New labels: {labels}")
-        # Split into train-valid-test per area based on col_count
+        # Create split df
         df_split = jpg_files_info.groupby(['label', 'area']).agg(col_count=('img_relative_path', 'count')).reset_index()
-        df_split.loc[:, 'col_count'] = df_split['col_count']*ascan_per_group
-        df_split = df_split.sort_values(by=['label', 'col_count'], ascending=[True, False])
-        df_split.loc[:, 'order_id'] = df_split.groupby('label').cumcount()
+        df_split.loc[:, 'col_count'] = df_split['col_count'] * ascan_per_group
+        df_split = df_split.sort_values(by=['label', 'area'], ascending=[True, True])
         df_split.loc[:, 'split'] = ''
+        # Split into train-valid-test per area based on col_count
+        """
+        df_split.loc[:, 'order_id'] = df_split.groupby('label').cumcount()
         df_split.loc[df_split['order_id'] % 3 == 0, 'split'] = 'train'
         df_split.loc[df_split['order_id'] % 3 == 1, 'split'] = 'test'
         df_split.loc[df_split['order_id'] % 3 == 2, 'split'] = 'valid'
+        """
+        # Pre-defined split
+        """
+        train_areas = ["fat/area1", "fat/area2", "muscle/area6", "muscle/area7", "heart/area1", "heart/area2",
+                       "testicle/area1", "testicle/area2", "liver/area8", "liver/area9"]
+        valid_areas = ["fat/area4", "muscle/area5", "heart/area4", "testicle/area3", "liver/area10"]
+        test_areas = ["fat/area10", "muscle/area9", "heart/area6", "testicle/area4", "liver/area11"]
+        """
+        train_areas = {'chicken_heart_muscle': ['area1', 'area2'],
+                       'lamb_heart_muscle': ['area6', 'area7'],
+                       'lamb_heart_fat': ['area1', 'area2'],
+                       'lamb_liver': ['area8', 'area9'],
+                       'lamb_testicle': ['area1', 'area2']}
+        valid_areas = {'chicken_heart_muscle': ['area4'],
+                       'lamb_heart_muscle': ['area5'],
+                       'lamb_heart_fat': ['area4'],
+                       'lamb_liver': ['area10'],
+                       'lamb_testicle': ['area3']}
+        test_areas = {'chicken_heart_muscle': ['area6'],
+                       'lamb_heart_muscle': ['area9'],
+                       'lamb_heart_fat': ['area10'],
+                       'lamb_liver': ['area11'],
+                       'lamb_testicle': ['area4']}
+        for s, a in zip(['train', 'valid', 'test'], [train_areas, valid_areas, test_areas]):
+            for l, al in a.items():
+                df_split.loc[(df_split['label'] == l) & (df_split['area'].isin(al)), 'split'] = s
+
+
     else:
         # Split into train-valid-test
         df_split = split_train_valid_test(ds_split, jpg_files_info, labels)
