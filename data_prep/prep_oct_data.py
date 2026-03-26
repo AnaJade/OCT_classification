@@ -442,14 +442,12 @@ if __name__ == '__main__':
                        'lamb_testicle': ['area3']}
         test_areas = {'chicken_heart_muscle': ['area6'],
                        'lamb_heart_muscle': ['area9'],
-                       'lamb_heart_fat': ['area10'],
+                       'lamb_heart_fat': ['area3'],
                        'lamb_liver': ['area11'],
                        'lamb_testicle': ['area4']}
         for s, a in zip(['train', 'valid', 'test'], [train_areas, valid_areas, test_areas]):
             for l, al in a.items():
                 df_split.loc[(df_split['label'] == l) & (df_split['area'].isin(al)), 'split'] = s
-
-
     else:
         # Split into train-valid-test
         df_split = split_train_valid_test(ds_split, jpg_files_info, labels)
@@ -459,8 +457,10 @@ if __name__ == '__main__':
 
     # Get mean and std of train set
     print("Calculating the mean and std of training images...")
+    new_lbl_str = f"{overwrite_labels_path.stem}_"
+    traj_str = f"{''.join([t.capitalize() for t in jpg_files_info['traj_type'].unique().tolist()])}_"
     train_map_df = img_root_path.joinpath(
-        f"train{'Mini' if use_mini_dataset else ''}_mapping_{ascan_per_group}scans.csv")
+        f"train{'Mini' if use_mini_dataset else ''}_mapping_{new_lbl_str}{traj_str}{ascan_per_group}scans.csv")
     train_map_df = pd.read_csv(train_map_df)
     mean, std = get_img_mean_std(train_map_df, target_path)
     print(f"Train dataset mean: {mean}")
