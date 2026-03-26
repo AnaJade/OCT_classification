@@ -121,28 +121,39 @@ class SupervisedModel(object):
                 labels = labels.to(self.args.device)
                 if len(labels.shape) == 1:
                     labels = labels.unsqueeze(1)
+                # One-hot → class index
+                labels = torch.argmax(labels, dim=1)
                 opt.zero_grad()
-                preds = self.model(images)
-                batch_loss = criterion(preds, labels)
+                outputs = self.model(images)
+                batch_loss = criterion(outputs, labels)
                 batch_loss.backward()
                 opt.step()
                 avg_epoch_train_loss.append(batch_loss)
-            if scheduler is not None:
-                scheduler.step()
             avg_epoch_train_loss = float(torch.mean(torch.stack(avg_epoch_train_loss)).cpu().detach().numpy())
             print(f"Average epoch train loss: {avg_epoch_train_loss}")
 
             # Get validation loss
             self.model.eval()
             with torch.no_grad():
+                correct = 0
+                total = 0
                 for images, labels in tqdm(valid_loader, desc='Validation'):
                     images = images.to(self.args.device)
                     labels = labels.to(self.args.device)
-                    preds = self.model(images)
-                    batch_loss = criterion(preds, labels)
+                    labels_idx = torch.argmax(labels, dim=1)
+                    outputs = self.model(images)
+                    batch_loss = criterion(outputs, labels_idx)
                     avg_epoch_valid_loss.append(batch_loss)
+                    preds = torch.argmax(outputs, dim=1)
+                    correct += (preds == labels_idx).sum().item()
+                    total += labels.size(0)
                 avg_epoch_valid_loss = float(torch.mean(torch.stack(avg_epoch_valid_loss)).cpu().detach().numpy())
                 print(f"Average epoch valid loss: {avg_epoch_valid_loss}")
+                print(f"Epoch valid accuracy: {correct/total}")
+
+
+            if scheduler is not None:
+                scheduler.step(avg_epoch_valid_loss)
 
             if avg_epoch_valid_loss < best_valid_loss:
                 print(f'New best loss achieved @ epoch {epoch}: {avg_epoch_valid_loss}')
@@ -162,9 +173,9 @@ class SupervisedModel(object):
         with torch.no_grad():
             for images, labels in tqdm(test_loader, desc='Testing'):
                 images = images.to(self.args.device)
-                pred = self.model(images)
-                preds_all.append(pred)
-                labels_all.append(labels)
+                outputs = self.model(images)
+                preds_all.append(torch.argmax(outputs, dim=1))
+                labels_all.append(torch.argmax(labels, dim=1))
         preds_all = torch.concat(preds_all, dim=0).detach().to('cpu')
         labels_all = torch.concat(labels_all, dim=0).detach().to('cpu')
         return preds_all, labels_all
@@ -323,8 +334,9 @@ def main():
     model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt)
 
     # Get test set performance
-    test_logits, test_oh_labels = model.test(test_loader)
+    test_preds, test_labels = model.test(test_loader)
     # Convert from logits to predictions
+    """
     if len(labels) > 2:
         test_probs = F.softmax(test_logits, dim=1)
         test_preds = torch.argmax(test_probs, dim=1)
@@ -333,7 +345,7 @@ def main():
         test_probs = F.sigmoid(test_logits)
         test_preds = test_probs > 0.5
         test_labels = test_oh_labels
-
+    """
     # Calculate metrics
     print(f"Test set results using {args.arch} backbone:")
     report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)

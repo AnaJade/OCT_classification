@@ -102,7 +102,7 @@ finetune:
   num_workers: 0
   max_epochs: 50 # 500
   batch_size: 128
-  lr: 0.0001
+  lr: 0.00001
   disable_cuda: False
   gpu_index: 0
   patience: 5

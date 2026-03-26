@@ -32,7 +32,7 @@ from finetune_model import SupervisedModel
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_supervised_oct_data_loaders, get_oct_data_loaders, build_image_root
+from utils_data import get_supervised_oct_data_loaders, get_oct_data_loaders, build_image_root, RandomWrapAround
 
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
@@ -210,7 +210,14 @@ def main():
 
     # Create train and test sets
     if 'oct' in args.dataset_name:
-        train_aug = [v2.RandomEqualize(p=0.98)]
+        # train_aug = [v2.RandomEqualize(p=0.98)]
+        train_aug = [
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),
+            transforms.RandomEqualize(p=0.5),
+            RandomWrapAround(dim=-1, p=1.0),
+            RandomWrapAround(dim=-2, p=1.0)
+        ]
         # train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
         #                                                                train_aug=train_aug,
         #                                                                mean=mean[args.dataset_name],
@@ -284,15 +291,22 @@ def main():
         class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
         pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
             args.device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.0)
     opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
-    scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
+    # scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        opt,
+        mode='min',
+        factor=0.5,
+        patience=2
+    )
     model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt,
                    scheduler=scheduler)
 
     # Get test set performance
-    test_logits, test_oh_labels = model.test(test_loader)
+    test_preds, test_labels = model.test(test_loader)
     # Convert from logits to predictions
+    """
     if len(labels) > 2:
         test_probs = F.softmax(test_logits, dim=1)
         test_preds = torch.argmax(test_probs, dim=1)
@@ -301,7 +315,7 @@ def main():
         test_probs = F.sigmoid(test_logits)
         test_preds = test_probs > 0.5
         test_labels = test_oh_labels
-
+    """
     # Calculate metrics
     print(f"Test set results using {args.arch} backbone:")
     report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)

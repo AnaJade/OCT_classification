@@ -27,7 +27,7 @@ from feature_model import get_backbone
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import OCTDataset, build_image_root
+from utils_data import OCTDataset, build_image_root, RandomWrapAround
 
 
 # Set up the argument parser
@@ -177,10 +177,18 @@ if __name__ == "__main__":
 
     # Dataloader
     if args.dataset_name == 'oct':
-        img_transforms = [transforms.ToTensor(), # scales pixel values to [0, 1]
-                          transforms.Resize((args.img_reshape, args.img_reshape)),
-                          transforms.Normalize(mean=mean[args.dataset_name],
-                                               std=std[args.dataset_name])]
+        img_transforms = [
+            transforms.RandomEqualize(p=0.5),
+            transforms.ToTensor(), # scales pixel values to [0, 1]
+            transforms.Resize((args.img_reshape, args.img_reshape)),
+            transforms.Normalize(mean=mean[args.dataset_name],
+                                 std=std[args.dataset_name]),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),
+            RandomWrapAround(dim=-1, p=1.0),
+            RandomWrapAround(dim=-2, p=1.0)
+        ]
+
         if (args.sample_within_image <= 0) and (args.img_reshape <= 480):
             img_transforms.insert(1, transforms.CenterCrop(480))
         if args.img_channel == 1:

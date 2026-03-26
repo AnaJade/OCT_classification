@@ -25,6 +25,7 @@ import cv2
 from scipy import signal
 from scipy.io import loadmat
 from PIL import Image
+import random
 from sklearn.metrics import mean_squared_error
 
 import torch
@@ -143,7 +144,7 @@ class OCTDataset(Dataset): # Used in train_moco
         if supervised: # subset is not None:
             self.map_df = self.map_df[self.map_df['subset'] == f'{split}_supervised'].reset_index(drop=True).copy()
         else:
-            self.map_df = self.map_df[self.map_df['subset'] == f'{split}'].reset_index(drop=True).copy()
+            self.map_df = self.map_df[self.map_df['subset'].str.contains(split)].reset_index(drop=True).copy()
 
         if (self.sample_within_image > 1) and (self.sample_within_image < ascan_per_group):
             self.map_df.loc[:, 'img_idx_start'] = self.map_df.loc[:, 'idx_start']
@@ -314,13 +315,20 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
     split_names = ['train', 'valid', 'test']
     if args.dataset_name == 'oct' and supervised:
         split_names = [f'{s}_supervised' for s in split_names]
+    # Check if RandomEqualize is in train_aug
+    req_idx = [i for i in range(len(train_aug)) if isinstance(train_aug[i], torchvision.transforms.transforms.RandomEqualize)]
+    if len(req_idx) > 0:
+        req_idx = req_idx[0]
+        augs = [train_aug[req_idx]] + img_transforms + train_aug[:req_idx] + train_aug[req_idx+1:]
+    else:
+        augs = img_transforms + train_aug
     train_dataset = OCTDataset(root_path, split_names[0],
                                args.map_df_paths, args.labels_dict,
                                ch_in=args.img_channel,
                                sample_within_image=args.sample_within_image,
                                use_iipp=False, # args.use_iipp,
                                num_same_area=-1,
-                               transforms=transforms.Compose(train_aug + img_transforms),
+                               transforms=transforms.Compose(augs),
                                pre_sample=args.dataset_sample,
                                seq_split=seq_split)
 
@@ -333,7 +341,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                                sample_within_image=args.sample_within_image,
                                use_iipp=False,  # args.use_iipp,
                                num_same_area=-1,
-                               transforms=transforms.Compose(train_aug + img_transforms),
+                               transforms=transforms.Compose(augs),
                                pre_sample=args.dataset_sample,
                                seq_split=seq_split)
 
@@ -346,7 +354,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                               sample_within_image=args.sample_within_image,
                               use_iipp=False,
                               num_same_area=-1,
-                              transforms=transforms.Compose(train_aug + img_transforms),
+                              transforms=transforms.Compose(augs),
                               pre_sample=args.dataset_sample,
                               seq_split=seq_split)
 
@@ -436,6 +444,36 @@ def movmean(a:np.ndarray, w:int) -> np.ndarray:
     # a = signal.convolve2d(a_exp, np.ones((1, w)), 'valid') / w
     a = signal.fftconvolve(a, np.ones((1, w)), mode='same')/w
     return a
+
+
+class RandomWrapAround:
+    def __init__(self, dim=-1, p=1.0):
+        """
+        dim: dimension along which to wrap (default: last dimension, e.g. width / A-scan)
+        p: probability of applying the transform
+        """
+        self.dim = dim
+        self.p = p
+
+    def __call__(self, x):
+        """
+        x: torch.Tensor (e.g. [C, H, W] or [H, W])
+        """
+        if random.random() > self.p:
+            return x
+
+        size = x.size()[self.dim]
+        shift = random.randint(0, size - 1)
+
+        if shift == 0:
+            return x
+
+        # split + concatenate (circular shift)
+        return torch.cat(
+            [x.narrow(self.dim, shift, size - shift),
+             x.narrow(self.dim, 0, shift)],
+            dim=self.dim
+        )
 
 
 class NormTransform(torch.nn.Module):
