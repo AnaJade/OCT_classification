@@ -33,7 +33,7 @@ from SimCLR.models.resnet_simclr import FeatureModelSimCLR
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_supervised_oct_data_loaders, build_image_root
+from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround
 
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
@@ -208,9 +208,14 @@ def main():
 
     configs = utils.load_configs(config_file)
     if platform == "linux" or platform == "linux2":
-        dataset_path = pathlib.Path(configs['finetune']['dataset_path_linux'])
+        print(f"socket name: {socket.gethostname()}")
+        if 'hpc' in socket.gethostname() or 'u00' in socket.gethostname():
+            dataset_path = pathlib.Path(configs['finetune']['dataset_path_hpc'])
+        else:
+            dataset_path = pathlib.Path(configs['finetune']['dataset_path_linux'])
     elif platform == "win32":
         dataset_path = pathlib.Path(configs['finetune']['dataset_path_windows'])
+    args.sequential_split = configs['finetune']['sequential_split']
     labels = configs['data']['labels']
     trajectories = configs['data']['trajectories']
     ascan_per_group = configs['data']['ascan_per_group']
@@ -309,10 +314,20 @@ def main():
 
     # Create train and test sets
     if 'oct' in args.dataset_name:
+        # train_aug = [v2.RandomEqualize(p=0.98)]
+        train_aug = [
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),
+            transforms.RandomEqualize(p=0.5),
+            RandomWrapAround(dim=-1, p=1.0),
+            RandomWrapAround(dim=-2, p=1.0)
+        ]
         train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
+                                                                       train_aug=train_aug,
                                                                        mean=mean[args.dataset_name],
                                                                        std=std[args.dataset_name],
-                                                                       shuffle=False)
+                                                                       shuffle=True,
+                                                                       seq_split=args.sequential_split)
     else:
         train_loader, test_loader = get_stl10_data_loaders(args.data, args.batch_size, shuffle=False,
                                                            download=False)
@@ -329,8 +344,15 @@ def main():
         class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
         pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
             args.device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
-    opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr)
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.0)
+    opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
+    # scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        opt,
+        mode='min',
+        factor=0.5,
+        patience=2
+    )
     model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt)
 
     # Get test set performance
