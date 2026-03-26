@@ -87,7 +87,7 @@ DINO:
   gpu_index: 0
   patience: 10 # 20
 finetune:
-  dataset_name: oct # oct_clinical  # [stl10, cifar10, cifar100]
+  dataset_name: oct_clinical # oct_clinical  # [stl10, cifar10, cifar100]
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit # X:\Boudreault
   dataset_path_linux: /data/Boudreault
   dataset_path_hpc: /usertemp/mts/cab8351

@@ -141,10 +141,11 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df = self.map_df.drop(columns=['subset_id'])
         print(f"{round((len(self.map_df[self.map_df['subset'].str.contains('supervised')])/len(self.map_df[~self.map_df['subset'].str.contains('supervised')]))*100, 2)}% ({len(self.map_df[self.map_df['subset'].str.contains('supervised')])}/{len(self.map_df[~self.map_df['subset'].str.contains('supervised')])}) of images in the {split} set are reserved for supervised learning.")
         """
-        if supervised: # subset is not None:
-            self.map_df = self.map_df[self.map_df['subset'] == f'{split}_supervised'].reset_index(drop=True).copy()
-        else:
-            self.map_df = self.map_df[self.map_df['subset'].str.contains(split)].reset_index(drop=True).copy()
+        if 'subset' in self.map_df.columns:
+            if supervised: # subset is not None:
+                self.map_df = self.map_df[self.map_df['subset'] == f'{split}_supervised'].reset_index(drop=True).copy()
+            else:
+                self.map_df = self.map_df[self.map_df['subset'].str.contains(split)].reset_index(drop=True).copy()
 
         if (self.sample_within_image > 1) and (self.sample_within_image < ascan_per_group):
             self.map_df.loc[:, 'img_idx_start'] = self.map_df.loc[:, 'idx_start']

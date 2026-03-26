@@ -218,19 +218,20 @@ def main():
             RandomWrapAround(dim=-1, p=1.0),
             RandomWrapAround(dim=-2, p=1.0)
         ]
-        # train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
-        #                                                                train_aug=train_aug,
-        #                                                                mean=mean[args.dataset_name],
-        #                                                                std=std[args.dataset_name],
-        #                                                                shuffle=True,
-        #                                                                seq_split=args.sequential_split)
-
+        train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
+                                                                       train_aug=train_aug,
+                                                                       mean=mean[args.dataset_name],
+                                                                       std=std[args.dataset_name],
+                                                                       shuffle=True,
+                                                                       seq_split=args.sequential_split)
+        """
         train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
                                                                        train_aug=train_aug,
                                                                        mean=mean[args.dataset_name],
                                                                        std=std[args.dataset_name],
                                                                        shuffle=True,
                                                                        seq_split=args.sequential_split)
+        """
     else:
         train_loader, test_loader = get_stl10_data_loaders(args.data, args.batch_size, shuffle=False,
                                                            download=False)
