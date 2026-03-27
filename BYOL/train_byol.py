@@ -17,6 +17,7 @@ from torch import nn
 import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
+from torchvision.transforms import v2, InterpolationMode
 from overwrite_byol import BYOL_custom
 from torchvision import models
 from torchvision.datasets import STL10
@@ -27,7 +28,7 @@ from feature_model import get_backbone
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import OCTDataset, build_image_root, RandomWrapAround
+from utils_data import OCTDataset, build_image_root, RandomWrapAround, NormTransform
 
 
 # Set up the argument parser
@@ -177,18 +178,10 @@ if __name__ == "__main__":
 
     # Dataloader
     if args.dataset_name == 'oct':
-        img_transforms = [
-            transforms.RandomEqualize(p=0.5),
-            transforms.ToTensor(), # scales pixel values to [0, 1]
-            transforms.Resize((args.img_reshape, args.img_reshape)),
-            transforms.Normalize(mean=mean[args.dataset_name],
-                                 std=std[args.dataset_name]),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomVerticalFlip(p=0.5),
-            RandomWrapAround(dim=-1, p=1.0),
-            RandomWrapAround(dim=-2, p=1.0)
-        ]
-
+        img_transforms = [transforms.RandomEqualize(p=0.5),
+                          v2.ToTensor(),  # scales pixel values to [0, 1]
+                          v2.Resize((args.img_reshape, args.img_reshape), interpolation=InterpolationMode.BILINEAR),
+                          NormTransform()]
         if (args.sample_within_image <= 0) and (args.img_reshape <= 480):
             img_transforms.insert(1, transforms.CenterCrop(480))
         if args.img_channel == 1:
@@ -230,12 +223,18 @@ if __name__ == "__main__":
         #   random_crop(scale=[0.25, 1], aspect_ratio=[3/4, 4/3]
         #   resize(192x192)
         # No gaussian blur, hue, saturation and colour droppings
-        aug = [transforms.RandomApply([transforms.RandomVerticalFlip()], p=0.3), # Used to counter flipped scans
-               transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),
-               transforms.RandomApply([transforms.RandomRotation(degrees=8),
-                                       # transforms.CenterCrop(size=(188, 236)), # Used in the paper, but not really applicable here
-                                       transforms.RandomHorizontalFlip()], p=0.5),
-               ]
+        # aug = [transforms.RandomApply([transforms.RandomVerticalFlip()], p=0.3), # Used to counter flipped scans
+        #        transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),
+        #        transforms.RandomApply([transforms.RandomRotation(degrees=8),
+        #                                # transforms.CenterCrop(size=(188, 236)), # Used in the paper, but not really applicable here
+        #                                transforms.RandomHorizontalFlip()], p=0.5),
+        #        ]
+        aug = [
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),
+            RandomWrapAround(dim=-1, p=1.0),
+            RandomWrapAround(dim=-2, p=1.0)
+        ]
         aug = transforms.Compose(aug)
 
         learner = BYOL_custom(
@@ -260,7 +259,7 @@ if __name__ == "__main__":
         for e in range(args.epochs):
             print(f"\n================================\n"
                   f"Epoch {e}")
-            if (e - best_epoch) >= args.patience:
+            if (e - best_epoch) >= args.patience+1:
                 print(f'Loss has not improved for {args.patience} epochs. Training has stopped')
                 print(f'Best loss was {best_loss} @ epoch {best_epoch}')
                 break
@@ -299,8 +298,6 @@ if __name__ == "__main__":
                     utils.wandb_log('batch', loss=loss)
 
             avg_epoch_loss = float(torch.mean(torch.stack(avg_epoch_loss)).cpu().detach().numpy())
-            if wandb_log:
-                utils.wandb_log('epoch', loss=avg_epoch_loss)
             if avg_epoch_loss < best_loss:
                 print(f'New best loss achieved @ epoch {e}: {avg_epoch_loss}')
                 best_epoch = e
@@ -308,6 +305,9 @@ if __name__ == "__main__":
                 torch.save(feature_model.state_dict(), save_folder.joinpath(f'byol_best_loss.pt'))
             if (e+1)%10 == 0:
                 torch.save(feature_model.state_dict(), save_folder.joinpath('byol_{:04d}.pth.tar'.format(e)))
+
+            if wandb_log:
+                utils.wandb_log('epoch', loss=avg_epoch_loss, best=best_epoch, best_loss=best_loss)
 
         # save your improved network
         torch.save(feature_model.state_dict(), save_folder.joinpath('byol_{:04d}_last.pth.tar'.format(e)))

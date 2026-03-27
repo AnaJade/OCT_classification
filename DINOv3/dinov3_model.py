@@ -170,7 +170,7 @@ class DINO_LoRA(torch.nn.Module):
         for epoch in range(self.args.epochs):
             print(f"\n================================\n"
                   f"Epoch {epoch}")
-            if (epoch - best_epoch) >= self.args.patience:
+            if (epoch - best_epoch) >= self.args.patience+1:
                 print(f'Loss has not improved for {self.args.patience} epochs. Training has stopped')
                 print(f'Best loss was {best_valid_loss} @ epoch {best_epoch}')
                 break
@@ -181,11 +181,15 @@ class DINO_LoRA(torch.nn.Module):
             for images, labels in tqdm(train_loader, desc='Training'):
                 images = images.to(self.args.device)
                 labels = labels.to(self.args.device)
-                if len(labels.shape) == 1:
-                    labels = labels.unsqueeze(1)
+                if labels.shape[-1] > 1:
+                    # One-hot → class index
+                    labels = torch.argmax(labels, dim=1)
+                else:
+                    # labels = labels.unsqueeze(1)
+                    pass
                 opt.zero_grad()
-                preds = self.dino_model(images)
-                batch_loss = criterion(preds, labels)
+                outputs = self.dino_model(images)
+                batch_loss = criterion(outputs, labels)
                 batch_loss.backward()
                 opt.step()
                 avg_epoch_train_loss.append(batch_loss)
@@ -199,16 +203,28 @@ class DINO_LoRA(torch.nn.Module):
             # Get validation loss
             self.dino_model.eval()
             with torch.no_grad():
+                correct = 0
+                total = 0
                 for images, labels in tqdm(valid_loader, desc='Validation'):
                     images = images.to(self.args.device)
                     labels = labels.to(self.args.device)
-                    preds = self.dino_model(images)
-                    batch_loss = criterion(preds, labels)
+                    if labels.shape[-1] > 1:
+                        # One-hot → class index
+                        labels_idx = torch.argmax(labels, dim=1)
+                    else:
+                        labels_idx = labels
+                    outputs = self.dino_model(images)
+                    batch_loss = criterion(outputs, labels)
                     avg_epoch_valid_loss.append(batch_loss)
+                    if labels.shape[-1] > 1:
+                        preds = torch.argmax(outputs, dim=1)
+                    else:
+                        preds = (outputs > 0.5).to(torch.float16)
+                    correct += (preds == labels_idx).sum().item()
+                    total += labels.size(0)
                 avg_epoch_valid_loss = float(torch.mean(torch.stack(avg_epoch_valid_loss)).cpu().detach().numpy())
                 print(f"Average epoch valid loss: {avg_epoch_valid_loss}")
-                if wandb_log:
-                    utils.wandb_log('epoch', valid_loss=avg_epoch_valid_loss)
+                print(f"Epoch valid accuracy: {correct / total}")
 
             if avg_epoch_valid_loss < best_valid_loss:
                 print(f'New best loss achieved @ epoch {epoch}: {avg_epoch_valid_loss}')
@@ -223,6 +239,9 @@ class DINO_LoRA(torch.nn.Module):
                     lora_weights = self.dino_model.state_dict()
                     lora_weights = {n: w for n, w in lora_weights.items() if 'lora' in n}
                     torch.save(lora_weights, self.lora_best_weights_path)
+
+            if wandb_log:
+                utils.wandb_log('epoch', valid_loss=avg_epoch_valid_loss, best=best_epoch, best_loss=best_valid_loss, valid_acc=correct / total)
 
     def test(self, test_loader):
         # Update model weights
@@ -255,8 +274,15 @@ class DINO_LoRA(torch.nn.Module):
         with torch.no_grad():
             for images, labels in tqdm(test_loader, desc='Testing'):
                 images = images.to(self.args.device)
-                pred = self.dino_model(images)
-                preds_all.append(pred)
+                outputs = self.dino_model(images)
+                if labels.shape[-1] > 1:
+                    # One-hot → class index
+                    preds = torch.argmax(outputs, dim=1)
+                    labels = torch.argmax(labels, dim=1)
+                else:
+                    preds = (outputs > 0.5).to(torch.float16)
+                    labels = labels
+                preds_all.append(preds)
                 labels_all.append(labels)
         preds_all = torch.concat(preds_all, dim=0).detach().to('cpu')
         labels_all = torch.concat(labels_all, dim=0).detach().to('cpu')

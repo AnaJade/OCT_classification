@@ -56,9 +56,10 @@ class OCTDataset(Dataset): # Used in train_moco
         :param use_iipp: Whether to prepare the mapping df for intra-image positive pairs (adding meta-data)
         :param num_same_area: number of images that will also be sampled within the same area (only for SimCLR, pairs have to be pre-assigned for BYOL)
         :param transforms: Set of transforms that will be applied to each image before being used as input by the model
-        :param preload_data: Whether to preload and save all the data into class variables
         :param pre_shuffle: Whether to shuffle the images once at the beginning
         :param pre_sample: Ratio of images to be kept
+        :param seq_split: Whether to split the dataset per trajectory (first 60% train, 20% valid, last 20% test)
+        :param ratio_sup: Ratio of images to be used for supervised training
         """
         # Check if re-splitting is needed (in case split in ['train_supervised', 'valid_supervised', 'test_supervised'])
         supervised = 'supervised' in split

@@ -11,6 +11,7 @@ from addict import Dict
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 import torch
 from torch import nn
@@ -18,7 +19,8 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from sklearn.metrics import classification_report
+from torchvision.transforms import v2, InterpolationMode
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 
 from dinov3_model import DINO_LoRA
 
@@ -26,7 +28,7 @@ from dinov3_model import DINO_LoRA
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_supervised_oct_data_loaders, build_image_root
+from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround
 
 
 # Set up the argument parser
@@ -126,6 +128,7 @@ if __name__ == "__main__":
         args.img_size = args.img_reshape
     else:
         args.img_size = 512  # BYOL requires square images, so all images will be reshaped to 512x512
+    args.ratio_sup = configs['DINO']['test_ratio_sup']
     args.ascan_per_group = ascan_per_group
     if (args.dataset_name == 'oct') and (overwrite_labels_path is not None):
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
@@ -191,10 +194,27 @@ if __name__ == "__main__":
         args.gpu_index = -1
 
     # Create train, valid and test sets
+    train_aug = [
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+        transforms.RandomEqualize(p=0.5),
+        RandomWrapAround(dim=-1, p=1.0),
+        RandomWrapAround(dim=-2, p=1.0)
+    ]
+    test_aug = [
+        transforms.RandomEqualize(p=0.0),
+    ]
+    if args.dataset_name == 'oct_clinical':
+        train_aug = train_aug + [
+            transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8), ]
     train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
-                                                                   mean=mean[args.dataset_name],
-                                                                   std=std[args.dataset_name],
-                                                                   shuffle=False)
+                                                                              train_aug=train_aug,
+                                                                              test_aug=test_aug,
+                                                                              mean=mean[args.dataset_name],
+                                                                              std=std[args.dataset_name],
+                                                                              ratio_sup=args.ratio_sup,
+                                                                              shuffle=True,
+                                                                              seq_split=False)
 
     with torch.cuda.device(args.gpu_index):
             # feature_model, feature_layer = get_backbone(args.arch, args.use_pretrained)
@@ -245,18 +265,29 @@ if __name__ == "__main__":
             learner = DINO_LoRA(args, None, None)
 
             # Train linear layer and LoRA
-            pos_weights = None
             if args.dataset_name == 'oct_clinical':
                 # Define pos_weights
                 # https://www.codegenes.net/blog/pytorch-bcewithlogitsloss-pos_weight/#handling-class-imbalance
-                class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
-                pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(args.device)
-            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
-            opt = torch.optim.AdamW(learner.parameters(), lr=args.lr, weight_decay=0.1) # , eps=6e-5)
+                class_counts = train_loader.dataset.map_df.groupby('label').agg(
+                    img_count=('img_relative_path', 'count'))
+                pos_weights = torch.Tensor(
+                    [class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
+                    args.device)
+                criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+            else:
+                criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
+            opt = torch.optim.AdamW(learner.parameters(), lr=args.lr, weight_decay=1e-5)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                opt,
+                mode='min',
+                factor=0.5,
+                patience=2
+            )
             learner.train(train_loader, valid_loader, criterion, opt, wandb_log, project_name)
 
             # Get test set performance
-            test_logits, test_oh_labels = learner.test(test_loader)
+            test_preds, test_labels = learner.test(test_loader)
+            """
             # Convert from logits to predictions
             if len(labels) > 2:
                 test_probs = F.softmax(test_logits, dim=1)
@@ -266,9 +297,23 @@ if __name__ == "__main__":
                 test_probs = F.sigmoid(test_logits)
                 test_preds = test_probs > 0.5
                 test_labels = test_oh_labels
+            """
 
             # Calculate metrics
             print(f"Test set results using {args.arch} backbone:")
             report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
             print(report)
+
+            # Get confusion matrix display
+            cm = confusion_matrix(test_labels, test_preds)
+            cm_plot = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+            cm_plot.plot()
+            plt.title('Confusion matrix')
+            plt.xlabel('Predicted label')
+            plt.ylabel('True label')
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+            cm_path = f"confusion_matrix_{args.dataset_name}.png"
+            plt.savefig(args.save_folder.joinpath(cm_path))
+            plt.show()
 

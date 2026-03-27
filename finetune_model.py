@@ -19,6 +19,7 @@ from sklearn import preprocessing
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
+from torchvision.transforms import v2, InterpolationMode
 from torchvision import datasets
 import torch.nn as nn
 import torch.nn.functional as F
@@ -108,7 +109,7 @@ class SupervisedModel(object):
         for epoch in range(self.args.epochs):
             print(f"\n================================\n"
                   f"Epoch {epoch}")
-            if (epoch - best_epoch) >= self.args.patience:
+            if (epoch - best_epoch) >= self.args.patience+1:
                 print(f'Loss has not improved for {self.args.patience} epochs. Training has stopped')
                 print(f'Best loss was {best_valid_loss} @ epoch {best_epoch}')
                 break
@@ -150,7 +151,10 @@ class SupervisedModel(object):
                     outputs = self.model(images)
                     batch_loss = criterion(outputs, labels_idx)
                     avg_epoch_valid_loss.append(batch_loss)
-                    preds = torch.argmax(outputs, dim=1)
+                    if labels.shape[-1] > 1:
+                        preds = torch.argmax(outputs, dim=1)
+                    else:
+                        preds = (outputs > 0.5).to(torch.float16)
                     correct += (preds == labels_idx).sum().item()
                     total += labels.size(0)
                 avg_epoch_valid_loss = float(torch.mean(torch.stack(avg_epoch_valid_loss)).cpu().detach().numpy())
@@ -328,6 +332,8 @@ def main():
         test_aug = [
             transforms.RandomEqualize(p=0.0),
         ]
+        if args.dataset_name == 'oct_clinical':
+            train_aug = train_aug + [transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),]
         train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
                                                                        train_aug=train_aug,
                                                                        test_aug=test_aug,

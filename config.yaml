@@ -31,8 +31,9 @@ SimCLR:
   dataset_path_hpc: /usertemp/mts/cab8351
   img_channel: 1
   sample_within_image: -1 # Set to -1 for no sampling
-  img_reshape: 480
+  img_reshape: 256
   use_iipp: True
+  test_ratio_sup: 0.1 # Ratio of supervised images when training the test set
   num_same_area: 2 # Minimum number of images from the same area that will be used within a batch with iipp
   use_simclr_augmentations: False # If true, use the SimCLR paper transforms. Else, use OCT recommended transforms
   dataset_sample: 1  # Sample of the entire dataset
@@ -42,7 +43,7 @@ SimCLR:
   max_epochs: 500
   batch_size: 128 # 256 # Must be a multiple of num_same_area if iipp is used
   lr: 0.0003
-  weight_decay: 0.0001
+  weight_decay: 0.00001 # 0.0001
   disable_cuda: False
   fp16_precision: False
   log_every_n_steps: 2000 # Print update every x batch
@@ -56,15 +57,16 @@ BYOL:
   dataset_path_hpc: /usertemp/mts/cab8351
   img_channel: 1
   sample_within_image: -1
-  img_reshape: 480 # 480, 224 for ViT
+  img_reshape: 256 # 480, 224 for ViT
   use_iipp: True
+  test_ratio_sup: 0.1 # Ratio of supervised images when training the test set
   dataset_sample: 1 # 0.25  # Sample of the entire dataset
   arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
   max_epochs: 500
-  batch_size: 64
-  lr: 0.0003
+  batch_size: 64 # True batch size is double if iipp=True
+  lr: 0.00001 # 0.0003
   disable_cuda: False
   gpu_index: 0
   patience: 20
@@ -75,14 +77,15 @@ DINO:
   dataset_path_hpc: /usertemp/mts/cab8351
   img_channel: 1
   sample_within_image: -1
-  img_reshape: 480 # 480, 224 for ViT
+  img_reshape: 256 # 480, 224 for ViT
+  test_ratio_sup: 0.1 # Ratio of supervised images when training the test set
   dataset_sample: 1 # 0.25  # Sample of the entire dataset
   arch: vits # convnextt, vits, vitb, vitl, vith, vit7b
   use_lora: True
   num_workers: 0
   max_epochs: 100 # 60
   batch_size: 128
-  lr: 0.0001
+  lr: 0.00001
   disable_cuda: False
   gpu_index: 0
   patience: 10 # 20
@@ -96,7 +99,7 @@ finetune:
   sample_within_image: -1
   img_reshape: 256 # 480, 224 for ViT
   use_iipp: True
-  ratio_sup: 1 # Percentage of the images that will be used for supervised training, 2=use 1st half of each traj
+  ratio_sup: 0.1 # Percentage of the images that will be used for supervised training, 2=use 1st half of each traj
   dataset_sample: 1 # 0.25  # Sample of the entire dataset, 2 to remove sin traj
   approach: byol # simclr, byol
   arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0

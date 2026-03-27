@@ -4,10 +4,11 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from sklearn.linear_model import LogisticRegression
+import matplotlib.pyplot as plt
 from sklearn import preprocessing
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import classification_report, precision_score, recall_score, adjusted_rand_score, normalized_mutual_info_score
+from sklearn.metrics import classification_report, precision_score, recall_score, adjusted_rand_score, normalized_mutual_info_score, confusion_matrix, ConfusionMatrixDisplay
 
 from SimCLR.models.resnet_simclr import FeatureModelSimCLR
 from BYOL.feature_model import get_backbone
@@ -103,16 +104,16 @@ class LogisticRegressionEvaluator(object):
             self.log_regression.eval()
             for batch_x, batch_y in test_loader:
                 batch_x, batch_y = batch_x.to(self.args.device), batch_y.to(self.args.device)
-                logits = self.log_regression(batch_x)
+                outputs = self.log_regression(batch_x)
 
-                test_probs = F.softmax(logits, dim=1)
-                predicted = torch.argmax(test_probs, dim=1)
+                predicted = torch.argmax(outputs, dim=1)
+                labels = torch.argmax(labels, dim=1)
                 batch_y = torch.argmax(batch_y, dim=1)
                 total += batch_y.size(0)
                 correct += (predicted == batch_y).sum().item()
 
-                # Save valuesbit
-                logits_epoch.append(logits)
+                # Save values
+                logits_epoch.append(outputs)
                 y_true_epoch.append(batch_y)
 
             final_acc = 100 * correct / total
@@ -138,9 +139,8 @@ class LogisticRegressionEvaluator(object):
 
         weight_decay = self._sample_weight_decay()
 
-        # optimizer = torch.optim.Adam(self.log_regression.parameters(), 3e-4, weight_decay=weight_decay)
+        criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
         optimizer = torch.optim.AdamW(self.log_regression.parameters(), lr=self.args.lr, weight_decay=weight_decay)
-        criterion = torch.nn.BCEWithLogitsLoss()
 
         best_nmi = 0
         best_epoch_acc = 0
@@ -148,13 +148,15 @@ class LogisticRegressionEvaluator(object):
         best_epoch_recall = 0
         best_epoch_ari = 0
         best_epoch = 0
-        best_report = None
+        best_labels = None
+        best_preds = None
         print("Training regression model...")
         for e in tqdm(range(200)):
             for batch_x, batch_y in train_loader:
                 batch_x, batch_y = batch_x.to(self.args.device), batch_y.to(self.args.device)
                 optimizer.zero_grad()
                 logits = self.log_regression(batch_x)
+                batch_y = torch.argmax(batch_y, dim=1)
                 loss = criterion(logits.type(torch.float32), batch_y.type(torch.float32))
                 loss.backward()
                 optimizer.step()
@@ -179,13 +181,12 @@ class LogisticRegressionEvaluator(object):
                 # print("Saving new model with accuracy {}".format(epoch_acc))
                 best_nmi = nmi
                 best_epoch = e
-                best_epoch_acc = acc
-                best_epoch_precision = precision
-                best_epoch_recall = recall
+                # best_epoch_acc = acc
+                # best_epoch_precision = precision
+                # best_epoch_recall = recall
                 best_epoch_ari = ari
-                best_report = classification_report(eval_df_epoch['label'], eval_df_epoch['pred'],
-                                                    target_names=self.args.labels_dict.values(),
-                                                    digits=4, zero_division=np.nan)
+                best_labels = eval_df_epoch['label']
+                best_preds = eval_df_epoch['pred']
                 torch.save(self.log_regression.state_dict(), save_folder.joinpath('log_regression.pth'))
 
         print("--------------")
@@ -196,4 +197,19 @@ class LogisticRegressionEvaluator(object):
         # print(f"Recall @ epoch {best_epoch}: {best_epoch_recall}")
         print(f"ARI @ epoch {best_epoch}: {best_epoch_ari}")
         print(f"Classification report @ epoch {best_epoch}")
-        print(best_report)
+        report = classification_report(best_labels, best_preds,
+                                            target_names=self.args.labels_dict.values(),
+                                            digits=4, zero_division=np.nan)
+        print(report)
+        # Get confusion matrix display
+        cm = confusion_matrix(best_labels, best_preds)
+        cm_plot = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=self.args.labels_dict.values())
+        cm_plot.plot()
+        plt.title('Confusion matrix')
+        plt.xlabel('Predicted label')
+        plt.ylabel('True label')
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        cm_path = f"confusion_matrix_{self.args.dataset_name}.png"
+        plt.savefig(save_folder.joinpath(cm_path))
+        plt.show()
