@@ -109,7 +109,7 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df['area_id'] = self.map_df.groupby(['label', 'area']).ngroup()
 
         # Remove images from the second half of the trajectories
-        if supervised and (self.ratio_sup == 1):
+        if supervised and (self.ratio_sup == 2):
             self.map_df['id_traj'] = self.map_df.groupby('trajectory').cumcount()
             idx_split = self.map_df.groupby('trajectory').agg(max_idx=('id_traj', 'max'))
             idx_split.loc[:, 'max_keep'] = idx_split.loc[:, 'max_idx'] * 0.5

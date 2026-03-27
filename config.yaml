@@ -96,7 +96,7 @@ finetune:
   sample_within_image: -1
   img_reshape: 256 # 480, 224 for ViT
   use_iipp: True
-  ratio_sup: 1 # Percentage of the images that will be used for supervised training, 1=use 1st half of each traj
+  ratio_sup: 1 # Percentage of the images that will be used for supervised training, 2=use 1st half of each traj
   dataset_sample: 1 # 0.25  # Sample of the entire dataset, 2 to remove sin traj
   approach: byol # simclr, byol
   arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
