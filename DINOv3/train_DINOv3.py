@@ -113,8 +113,12 @@ if __name__ == "__main__":
     image_root = build_image_root(ascan_per_group, pre_processing)
     print(f"dataset image root: {args.data.joinpath(image_root)}")
     args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
-    new_lbl_str = f'{overwrite_labels_path.stem}_' if overwrite_labels_path is not None else ''
-    traj_str = f"{''.join([t.capitalize() for t in trajectories])}_" if len(trajectories) < 3 else ''
+    if args.dataset_name == 'oct':
+        new_lbl_str = f'{overwrite_labels_path.stem}_' if overwrite_labels_path is not None else ''
+        traj_str = f"{''.join([t.capitalize() for t in trajectories])}_" if len(trajectories) < 3 else ''
+    else:
+        new_lbl_str = ''
+        traj_str = ''
     args.map_df_paths = {
         split: args.data.joinpath(image_root).joinpath(
             f"{split}{'Mini' if use_mini_dataset else ''}_mapping_{new_lbl_str}{traj_str}{ascan_per_group}scans.csv")
