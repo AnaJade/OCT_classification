@@ -68,6 +68,15 @@ class SupervisedModel(object):
     def __init__(self, args, ckp_file):
         self.ckp_file = ckp_file
         self.args = args
+
+        # Load weights
+        state_dict = None
+        if self.ckp_file is not None:
+            print(f"Loading weights from {self.ckp_file}...")
+            state_dict = torch.load(self.ckp_file, map_location=self.args.device)
+            if 'state_dict' in state_dict.keys():
+                state_dict = state_dict['state_dict']
+
         # Define model
         if self.args.approach == 'byol':
             self.model, _ = get_backbone(args.arch, True)
@@ -75,7 +84,11 @@ class SupervisedModel(object):
             if args.img_channel == 1:
                 self.model = utils.update_backbone_channel(self.model, args.img_channel)
         elif self.args.approach == 'simclr':
-            self.model = FeatureModelSimCLR(arch=args.arch, out_dim=len(args.labels_dict), pretrained=False,
+            if state_dict is not None:
+                out_dim = len(state_dict['backbone.fc.2.bias'])
+            else:
+                out_dim = len(args.labels_dict)
+            self.model = FeatureModelSimCLR(arch=args.arch, out_dim=out_dim, pretrained=False,
                                             img_channel=args.img_channel)
             # Skip changing the first layer, already done in FeatureModelSimCLR
         self.save_folder = self.args.save_folder
@@ -86,11 +99,7 @@ class SupervisedModel(object):
             self.finetune_best_weights = None
 
         # Load weights
-        if self.ckp_file is not None:
-            print(f"Loading weights from {self.ckp_file}...")
-            state_dict = torch.load(self.ckp_file, map_location=self.args.device)
-            if 'state_dict' in state_dict.keys():
-                state_dict = state_dict['state_dict']
+        if state_dict is not None:
             self.model.load_state_dict(state_dict, strict=False)
 
         # Update classification head
