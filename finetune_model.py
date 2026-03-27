@@ -33,7 +33,7 @@ from SimCLR.models.resnet_simclr import FeatureModelSimCLR
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround
+from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround, NormTransform
 
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
@@ -79,7 +79,7 @@ class SupervisedModel(object):
                                             img_channel=args.img_channel)
             # Skip changing the first layer, already done in FeatureModelSimCLR
         self.save_folder = self.args.save_folder
-        self.finetune_best_weights_path = self.args.save_folder.joinpath(f'finetune_best_loss.pt')
+        self.finetune_best_weights_path = self.args.save_folder.joinpath(f'finetune_best_loss_{args.dataset_name}.pt')
         if self.finetune_best_weights_path.exists():
             self.finetune_best_weights = torch.load(self.finetune_best_weights_path, map_location=self.args.device)
         else:
@@ -119,10 +119,12 @@ class SupervisedModel(object):
             for images, labels in tqdm(train_loader, desc='Training'):
                 images = images.to(self.args.device)
                 labels = labels.to(self.args.device)
-                if len(labels.shape) == 1:
-                    labels = labels.unsqueeze(1)
-                # One-hot → class index
-                labels = torch.argmax(labels, dim=1)
+                if labels.shape[-1] > 1:
+                    # One-hot → class index
+                    labels = torch.argmax(labels, dim=1)
+                else:
+                    # labels = labels.unsqueeze(1)
+                    pass
                 opt.zero_grad()
                 outputs = self.model(images)
                 batch_loss = criterion(outputs, labels)
@@ -140,7 +142,11 @@ class SupervisedModel(object):
                 for images, labels in tqdm(valid_loader, desc='Validation'):
                     images = images.to(self.args.device)
                     labels = labels.to(self.args.device)
-                    labels_idx = torch.argmax(labels, dim=1)
+                    if labels.shape[-1] > 1:
+                        # One-hot → class index
+                        labels_idx = torch.argmax(labels, dim=1)
+                    else:
+                        labels_idx = labels
                     outputs = self.model(images)
                     batch_loss = criterion(outputs, labels_idx)
                     avg_epoch_valid_loss.append(batch_loss)
@@ -179,21 +185,6 @@ class SupervisedModel(object):
         preds_all = torch.concat(preds_all, dim=0).detach().to('cpu')
         labels_all = torch.concat(labels_all, dim=0).detach().to('cpu')
         return preds_all, labels_all
-
-
-def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):
-    train_dataset = datasets.STL10(root_path, split='train', download=download,
-                                   transform=transforms.ToTensor())
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size,
-                              num_workers=0, drop_last=False, shuffle=shuffle)
-
-    test_dataset = datasets.STL10(root_path, split='test', download=download,
-                                  transform=transforms.ToTensor())
-
-    test_loader = DataLoader(test_dataset, batch_size=batch_size,
-                             num_workers=0, drop_last=False, shuffle=shuffle)
-    return train_loader, test_loader
 
 
 def main():
@@ -266,6 +257,7 @@ def main():
     else:
         args.img_size = 512  # BYOL requires square images, so all images will be reshaped to 512x512
     args.use_iipp = configs['finetune']['use_iipp']
+    args.ratio_sup = configs['finetune']['ratio_sup']
     args.ascan_per_group = ascan_per_group
     if overwrite_labels_path is not None:
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
@@ -326,10 +318,15 @@ def main():
             RandomWrapAround(dim=-1, p=1.0),
             RandomWrapAround(dim=-2, p=1.0)
         ]
+        test_aug = [
+            transforms.RandomEqualize(p=0.0),
+        ]
         train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
                                                                        train_aug=train_aug,
+                                                                       test_aug=test_aug,
                                                                        mean=mean[args.dataset_name],
                                                                        std=std[args.dataset_name],
+                                                                       ratio_sup=args.ratio_sup,
                                                                        shuffle=True,
                                                                        seq_split=args.sequential_split)
     else:
@@ -348,7 +345,9 @@ def main():
         class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
         pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
             args.device)
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.0)
+        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+    else:
+        criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
     opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
     # scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -387,7 +386,7 @@ def main():
     plt.ylabel('True label')
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
-    plt.savefig(args.save_folder.joinpath('confusion_matrix.png'))
+    plt.savefig(args.save_folder.joinpath(f'confusion_matrix_{args.dataset_name}.png'))
     plt.show()
 
 

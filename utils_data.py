@@ -44,7 +44,7 @@ import utils
 class OCTDataset(Dataset): # Used in train_moco
     def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, ch_in=3,
                  sample_within_image=-1, use_iipp=False, num_same_area=-1, transforms=None, pre_shuffle=True,
-                 pre_sample=1, seq_split=False):
+                 pre_sample=1, seq_split=False, ratio_sup=1):
         """
         Dataset object used to pass images to a siamese network
         :param root: dataset root path
@@ -83,6 +83,7 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df_sampling = None # set for iipp when num_same_area >= 2
         self.show = False # For debug purposes
         self.new_labels = 'old_label' in self.map_df.columns
+        self.ratio_sup = ratio_sup
 
         # Update relative path to image paths
         ascan_per_group = self.map_df['idx_end'].iloc[0]
@@ -107,9 +108,16 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df['trajectory'] = ['_'.join(p.stem.split('_')[:-2]) for p in self.map_df['img_relative_path']]
         self.map_df['area_id'] = self.map_df.groupby(['label', 'area']).ngroup()
 
-        # Remove images that don't have ascan_per_group ascans in them
-        # Not needed with new method of generating images
-        # self.map_df = self.map_df.loc[self.map_df['idx_end'] - self.map_df['idx_start'] == ascan_per_group]
+        # Remove images from the second half of the trajectories
+        if supervised and (self.ratio_sup == 1):
+            self.map_df['id_traj'] = self.map_df.groupby('trajectory').cumcount()
+            idx_split = self.map_df.groupby('trajectory').agg(max_idx=('id_traj', 'max'))
+            idx_split.loc[:, 'max_keep'] = idx_split.loc[:, 'max_idx'] * 0.5
+            self.map_df = pd.merge(self.map_df, idx_split, on='trajectory')
+            self.map_df = self.map_df[self.map_df['id_traj'] < self.map_df['max_keep']].copy()
+            self.map_df = self.map_df.drop(columns=['id_traj', 'max_idx', 'max_keep'])
+            # Update split info
+            self.map_df.loc[:, 'subset'] = f'{split}_supervised'
 
         # Redo splitting
         if self.seq_split:
@@ -131,16 +139,18 @@ class OCTDataset(Dataset): # Used in train_moco
             # Remove extra cols
             self.map_df = self.map_df.drop(columns=['id_traj', 'max_train', 'max_valid'])
 
-        # Assign new subset if needed (Now done in prep_oct_data)
-        """
-        self.map_df.loc[:, 'subset_id'] = self.map_df.groupby(['area_id', 'trajectory']).cumcount()
-        self.map_df.loc[:, 'subset'] = ''
-        # Reserve 10% of data for supervised training
-        self.map_df.loc[self.map_df['subset_id'] % 10 == 9, 'subset'] = f'{split}_supervised'
-        self.map_df.loc[self.map_df['subset'] != f'{split}_supervised', 'subset'] = split
-        self.map_df = self.map_df.drop(columns=['subset_id'])
-        print(f"{round((len(self.map_df[self.map_df['subset'].str.contains('supervised')])/len(self.map_df[~self.map_df['subset'].str.contains('supervised')]))*100, 2)}% ({len(self.map_df[self.map_df['subset'].str.contains('supervised')])}/{len(self.map_df[~self.map_df['subset'].str.contains('supervised')])}) of images in the {split} set are reserved for supervised learning.")
-        """
+        # Reset ratio of images used for supervised training
+        if  (self.ratio_sup > 0) and (self.ratio_sup < 1):
+            self.map_df.loc[:, 'subset_id'] = self.map_df.groupby(['area_id', 'trajectory']).cumcount()
+            self.map_df.loc[:, 'subset'] = ''
+            mod = int(1/self.ratio_sup)
+            sup = int(mod-1)
+            # Reserve 10% of data for supervised training
+            self.map_df.loc[self.map_df['subset_id'] % mod == sup, 'subset'] = f'{split}_supervised'
+            self.map_df.loc[self.map_df['subset'] != f'{split}_supervised', 'subset'] = split
+            self.map_df = self.map_df.drop(columns=['subset_id'])
+            print(f"{round((len(self.map_df[self.map_df['subset'].str.contains('supervised')])/len(self.map_df[~self.map_df['subset'].str.contains('supervised')]))*100, 2)}% ({len(self.map_df[self.map_df['subset'].str.contains('supervised')])}/{len(self.map_df[~self.map_df['subset'].str.contains('supervised')])}) of images in the {split} set remain for supervised learning.")
+
         if 'subset' in self.map_df.columns:
             if supervised: # subset is not None:
                 self.map_df = self.map_df[self.map_df['subset'] == f'{split}_supervised'].reset_index(drop=True).copy()
@@ -306,10 +316,11 @@ class OCTDataset(Dataset): # Used in train_moco
         self.map_df_sampling.loc[:, 'weights'] = 1
 
 
-def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
+def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, test_aug:list,
+                         mean:list, std:list, supervised=False, ratio_sup=1, shuffle=False, seq_split=False):
     img_transforms = [v2.ToTensor(),
                       v2.Resize((args.img_reshape, args.img_reshape), interpolation=InterpolationMode.BILINEAR),
-                      v2.Normalize(mean=mean,std=std)
+                      NormTransform()
     ]
     if args.img_channel == 1:
         img_transforms.append(transforms.Grayscale())
@@ -320,18 +331,28 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
     req_idx = [i for i in range(len(train_aug)) if isinstance(train_aug[i], torchvision.transforms.transforms.RandomEqualize)]
     if len(req_idx) > 0:
         req_idx = req_idx[0]
-        augs = [train_aug[req_idx]] + img_transforms + train_aug[:req_idx] + train_aug[req_idx+1:]
+        train_augs = [train_aug[req_idx]] + img_transforms + train_aug[:req_idx] + train_aug[req_idx+1:]
     else:
-        augs = img_transforms + train_aug
+        train_augs = img_transforms + train_aug
+    # Check if RandomEqualize is in test_aug
+    req_idx = [i for i in range(len(test_aug)) if
+               isinstance(test_aug[i], torchvision.transforms.transforms.RandomEqualize)]
+    if len(req_idx) > 0:
+        req_idx = req_idx[0]
+        test_augs = [test_aug[req_idx]] + img_transforms + test_aug[:req_idx] + test_aug[req_idx + 1:]
+    else:
+        test_augs = img_transforms + test_aug
+
     train_dataset = OCTDataset(root_path, split_names[0],
                                args.map_df_paths, args.labels_dict,
                                ch_in=args.img_channel,
                                sample_within_image=args.sample_within_image,
                                use_iipp=False, # args.use_iipp,
                                num_same_area=-1,
-                               transforms=transforms.Compose(augs),
+                               transforms=transforms.Compose(train_augs),
                                pre_sample=args.dataset_sample,
-                               seq_split=seq_split)
+                               seq_split=seq_split,
+                               ratio_sup=ratio_sup)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size,
                               num_workers=0, drop_last=False, shuffle=shuffle)
@@ -342,9 +363,10 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                                sample_within_image=args.sample_within_image,
                                use_iipp=False,  # args.use_iipp,
                                num_same_area=-1,
-                               transforms=transforms.Compose(augs),
+                               transforms=transforms.Compose(test_augs),
                                pre_sample=args.dataset_sample,
-                               seq_split=seq_split)
+                               seq_split=seq_split,
+                               ratio_sup=ratio_sup)
 
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size,
                               num_workers=0, drop_last=False, shuffle=False)
@@ -355,17 +377,19 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                               sample_within_image=args.sample_within_image,
                               use_iipp=False,
                               num_same_area=-1,
-                              transforms=transforms.Compose(augs),
+                              transforms=transforms.Compose(test_augs),
                               pre_sample=args.dataset_sample,
-                              seq_split=seq_split)
+                              seq_split=seq_split,
+                              ratio_sup=ratio_sup)
 
     test_loader = DataLoader(test_dataset, batch_size=batch_size,
                              num_workers=0, drop_last=False, shuffle=False)
     return train_loader, valid_loader, test_loader
 
 
-def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, mean:list, std:list, supervised=False, shuffle=False, seq_split=False):
-    return get_oct_data_loaders(root_path, args, batch_size, train_aug, mean, std, True, shuffle, seq_split)
+def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, test_aug:list,
+                                    mean:list, std:list, supervised=True, ratio_sup=1, shuffle=False, seq_split=False):
+    return get_oct_data_loaders(root_path, args, batch_size, train_aug, test_aug, mean, std, True, ratio_sup, shuffle, seq_split)
 
 
 def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):
@@ -448,6 +472,9 @@ def movmean(a:np.ndarray, w:int) -> np.ndarray:
 
 
 class RandomWrapAround:
+    """
+    Used to move the place where the tissue structure is seen on the image (reproduce probe vertical mouvement)
+    """
     def __init__(self, dim=-1, p=1.0):
         """
         dim: dimension along which to wrap (default: last dimension, e.g. width / A-scan)
@@ -482,8 +509,10 @@ class NormTransform(torch.nn.Module):
     Convert tensor type from uint8 to float32, and divide by 255
     """
     def forward(self, img):
-        return img.astype(np.float64) / 255
-        # return img.float()/255
+        img = img.to(torch.float32)
+        img = img - img.mean()
+        img = img / img.std()
+        return img
 
 
 if __name__ == '__main__':
