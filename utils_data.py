@@ -325,7 +325,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
     if args.img_channel == 1:
         img_transforms.append(transforms.Grayscale())
     split_names = ['train', 'valid', 'test']
-    if args.dataset_name == 'oct' and supervised:
+    if 'oct' in args.dataset_name and supervised:
         split_names = [f'{s}_supervised' for s in split_names]
     # Check if RandomEqualize is in train_aug
     req_idx = [i for i in range(len(train_aug)) if isinstance(train_aug[i], torchvision.transforms.transforms.RandomEqualize)]

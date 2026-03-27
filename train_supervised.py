@@ -135,8 +135,12 @@ def main():
     image_root = build_image_root(ascan_per_group, pre_processing)
     print(f"dataset image root: {args.data.joinpath(image_root)}")
     args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
-    new_lbl_str = f'{overwrite_labels_path.stem}_' if overwrite_labels_path is not None else ''
-    traj_str = f"{''.join([t.capitalize() for t in trajectories])}_" if len(trajectories) < 3 else ''
+    if args.dataset_name == 'oct':
+        new_lbl_str = f'{overwrite_labels_path.stem}_' if overwrite_labels_path is not None else ''
+        traj_str = f"{''.join([t.capitalize() for t in trajectories])}_" if len(trajectories) < 3 else ''
+    else:
+        new_lbl_str = ''
+        traj_str = ''
     args.map_df_paths = {
         split: args.data.joinpath(image_root).joinpath(
             f"{split}{'Mini' if use_mini_dataset else ''}_mapping_{new_lbl_str}{traj_str}{ascan_per_group}scans.csv")
@@ -222,6 +226,8 @@ def main():
         test_aug = [
             transforms.RandomEqualize(p=0.0),
         ]
+        if args.dataset_name == 'oct_clinical':
+            train_aug = train_aug + [transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),]
         train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
                                                                        train_aug=train_aug,
                                                                        test_aug=test_aug,
@@ -230,15 +236,6 @@ def main():
                                                                        ratio_sup=args.ratio_sup,
                                                                        shuffle=True,
                                                                        seq_split=args.sequential_split)
-        """
-        train_loader, valid_loader, test_loader = get_oct_data_loaders(args.data, args, args.batch_size,
-                                                                       train_aug=train_aug,
-                                                                       test_aug=test_aug
-                                                                       mean=mean[args.dataset_name],
-                                                                       std=std[args.dataset_name],
-                                                                       shuffle=True,
-                                                                       seq_split=args.sequential_split)
-        """
     else:
         train_loader, test_loader = get_stl10_data_loaders(args.data, args.batch_size, shuffle=False,
                                                            download=False)
@@ -314,17 +311,6 @@ def main():
 
     # Get test set performance
     test_preds, test_labels = model.test(test_loader)
-    # Convert from logits to predictions
-    """
-    if len(labels) > 2:
-        test_probs = F.softmax(test_logits, dim=1)
-        test_preds = torch.argmax(test_probs, dim=1)
-        test_labels = torch.argmax(test_oh_labels, dim=1)
-    else:
-        test_probs = F.sigmoid(test_logits)
-        test_preds = test_probs > 0.5
-        test_labels = test_oh_labels
-    """
     # Calculate metrics
     print(f"Test set results using {args.arch} backbone:")
     report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)

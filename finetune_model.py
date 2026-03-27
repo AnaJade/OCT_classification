@@ -180,8 +180,15 @@ class SupervisedModel(object):
             for images, labels in tqdm(test_loader, desc='Testing'):
                 images = images.to(self.args.device)
                 outputs = self.model(images)
-                preds_all.append(torch.argmax(outputs, dim=1))
-                labels_all.append(torch.argmax(labels, dim=1))
+                if labels.shape[-1] > 1:
+                    # One-hot → class index
+                    preds = torch.argmax(outputs, dim=1)
+                    labels = torch.argmax(labels, dim=1)
+                else:
+                    preds = (outputs > 0.5).to(torch.float16)
+                    labels = labels
+                preds_all.append(preds)
+                labels_all.append(labels)
         preds_all = torch.concat(preds_all, dim=0).detach().to('cpu')
         labels_all = torch.concat(labels_all, dim=0).detach().to('cpu')
         return preds_all, labels_all
