@@ -85,7 +85,8 @@ class SupervisedModel(object):
                 self.model = utils.update_backbone_channel(self.model, args.img_channel)
         elif self.args.approach == 'simclr':
             if state_dict is not None:
-                out_dim = len(state_dict['backbone.fc.2.bias'])
+                last_layer = list(state_dict.keys())[-1]
+                out_dim = state_dict[last_layer].shape[0]
             else:
                 out_dim = len(args.labels_dict)
             self.model = FeatureModelSimCLR(arch=args.arch, out_dim=out_dim, pretrained=False,
