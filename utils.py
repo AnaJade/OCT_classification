@@ -78,7 +78,7 @@ def update_backbone_channel(feature_model, ch_in: int):
         layer = feature_model.conv1
     elif ('VisionTransformer' in arch) and ('PyramidVisionTransformer' not in arch):
         layer = feature_model.conv_proj
-    elif ('EfficientNet' in arch) or ('SwinTransformer' in arch) or ('ConvNeXt' in arch):
+    elif ('MobileNet' in arch) or ('EfficientNet' in arch) or ('SwinTransformer' in arch) or ('ConvNeXt' in arch):
         try:
             layer = feature_model.features[0][0]
         except AttributeError: # ConvNeXt from DINO
@@ -108,6 +108,11 @@ def set_classifier_head(feature_model, num_classes):
     if 'ResNet' in arch:
         dim_mlp = feature_model.fc.in_features
         feature_model.fc = nn.Sequential(nn.Linear(dim_mlp, num_classes))
+    elif 'MobileNet' in arch:
+        dim_mlp = feature_model.classifier[3].in_features
+        feature_model.classifier = nn.Sequential(
+            *list(feature_model.classifier)[:-1],
+            nn.Linear(dim_mlp, num_classes))
     elif ('VisionTransformer' in arch) and ('PyramidVisionTransformer' not in arch):
         dim_mlp = feature_model.heads.head.in_features
         feature_model.heads.head = nn.Sequential(nn.Linear(dim_mlp, num_classes))
@@ -141,6 +146,11 @@ def set_classifier_head_SimCLR(feature_model, num_classes):
     if 'ResNet' in arch:
         dim_mlp = feature_model.fc[0].in_features
         feature_model.fc = nn.Sequential(nn.Linear(dim_mlp, num_classes))
+    elif 'MobileNet' in arch:
+        dim_mlp = feature_model.classifier[3].in_features
+        feature_model.classifier = nn.Sequential(
+            *list(feature_model.classifier)[:-3],
+            nn.Linear(dim_mlp, num_classes))
     elif ('VisionTransformer' in arch) and ('PyramidVisionTransformer' not in arch):
         dim_mlp = feature_model.heads.head[0].in_features
         feature_model.heads.head = nn.Sequential(nn.Linear(dim_mlp, num_classes))

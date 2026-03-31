@@ -21,6 +21,9 @@ def get_backbone(arch: str, pretrained: bool):
     if arch == 'resnet18':
         feature_model = models.resnet18(weights=weights)
         feature_layer = 'avgpool'
+    elif arch == 'mobilenetv3':
+        feature_model = models.mobilenet_v3_small(weights=weights)
+        feature_layer = 'avgpool'
     elif arch == 'resnet50':
         feature_model = models.resnet50(weights=weights)
         feature_layer = 'avgpool'

@@ -37,7 +37,7 @@ SimCLR:
   num_same_area: 2 # Minimum number of images from the same area that will be used within a batch with iipp
   use_simclr_augmentations: False # If true, use the SimCLR paper transforms. Else, use OCT recommended transforms
   dataset_sample: 1  # Sample of the entire dataset
-  arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
+  arch: mobilenetv3 # resnet18, resnet50, mobilenetv3, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
   max_epochs: 500
@@ -61,7 +61,7 @@ BYOL:
   use_iipp: True
   test_ratio_sup: 0.1 # Ratio of supervised images when training the test set
   dataset_sample: 1 # 0.25  # Sample of the entire dataset
-  arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
+  arch: mobilenetv3 # resnet18, resnet50, mobilenetv3, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
   max_epochs: 500
@@ -102,7 +102,7 @@ finetune:
   ratio_sup: 0.1 # Percentage of the images that will be used for supervised training, 2=use 1st half of each traj
   dataset_sample: 1 # 0.25  # Sample of the entire dataset, 2 to remove sin traj
   approach: byol # simclr, byol
-  arch: resnet18 # resnet18, resnet50, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
+  arch: mobilenetv3 # resnet18, resnet50, mobilenetv3, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
   num_workers: 0
   max_epochs: 50 # 500
   batch_size: 128
