@@ -383,19 +383,15 @@ def main():
 
     # Get test set performance
     test_preds, test_labels = model.test(test_loader)
-    # Convert from logits to predictions
-    """
-    if len(labels) > 2:
-        test_probs = F.softmax(test_logits, dim=1)
-        test_preds = torch.argmax(test_probs, dim=1)
-        test_labels = torch.argmax(test_oh_labels, dim=1)
-    else:
-        test_probs = F.sigmoid(test_logits)
-        test_preds = test_probs > 0.5
-        test_labels = test_oh_labels
-    """
+
+    # Save predictions
+    preds_df = pd.DataFrame.from_dict({'pred': test_preds}, orient='columns')
+    preds_df = pd.concat([test_loader.dataset.map_df.copy(), preds_df], axis=1)
+    preds_path = f'preds_{args.dataset_name}_{args.ratio_sup * 100}p.csv'
+    preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
+
     # Calculate metrics
-    print(f"Test set results using {args.arch} backbone:")
+    print(f"Test set results using {args.arch} backbone (Finetune from {args.approach}, with {args.ratio_sup*100}% of {args.dataset_name}):")
     report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
     print(report)
 
