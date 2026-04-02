@@ -213,8 +213,8 @@ def main():
 
     if args.dataset_name == 'oct_clinical':
         # Generate cross-validation split
-        # cv_splits = get_cross_valid_splits(args, k=3)
-        cv_splits = [None]
+        cv_splits = get_cross_valid_splits(args, k=3)
+        # cv_splits = [None]
     else:
         cv_splits = [None]
 
