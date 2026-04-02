@@ -213,8 +213,8 @@ def main():
 
     if args.dataset_name == 'oct_clinical':
         # Generate cross-validation split
-        cv_splits = get_cross_valid_splits(args, k=3)
-        # cv_splits = [None]
+        # cv_splits = get_cross_valid_splits(args, k=3)
+        cv_splits = [None]
     else:
         cv_splits = [None]
 
@@ -321,13 +321,15 @@ def main():
         test_preds, test_labels = model.test(test_loader)
 
         # Save predictions
-        preds_df = pd.DataFrame.from_dict({'pred': test_preds}, orient='columns')
+        preds_df = pd.DataFrame.from_dict({'pred': test_preds.squeeze(-1), 'pred_labels': test_labels.squeeze(-1)}, orient='columns')
         preds_df = pd.concat([test_loader.dataset.map_df.copy(), preds_df], axis=1)
-        preds_path = f'preds_{args.dataset_name}_{args.ratio_sup*100}p{cv_split_str}.csv'
+        assert len(preds_df[preds_df['pred_labels'] == preds_df['label']]) == len(preds_df)
+        preds_df = preds_df.drop(columns=['pred_labels'])
+        preds_path = f'preds_{args.dataset_name}_{int(args.ratio_sup*100)}p{cv_split_str}.csv'
         preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
 
         # Calculate metrics
-        print(f"Test set results using {args.arch} backbone (supervised, with {args.ratio_sup * 100}% of {args.dataset_name}):")
+        print(f"Test set results using {args.arch} backbone \n(supervised, with {args.ratio_sup * 100}% of {args.dataset_name}):")
         report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
         print(report)
 
