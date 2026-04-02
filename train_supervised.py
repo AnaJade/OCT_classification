@@ -18,7 +18,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-from torchvision.transforms import v2
+from torchvision.transforms import v2, InterpolationMode
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
@@ -234,7 +234,11 @@ def main():
                 transforms.RandomEqualize(p=0.0),
             ]
             if args.dataset_name == 'oct_clinical':
-                train_aug = train_aug + [transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),]
+                # train_aug = train_aug + [transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),]
+                train_aug = train_aug + [
+                    # v2.RandomAdjustSharpness(sharpness_factor=3, p=0.3),
+                    v2.RandomAutocontrast(p=0.5),
+                                         ]
             train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
                                                                            train_aug=train_aug,
                                                                            test_aug=test_aug,
