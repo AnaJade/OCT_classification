@@ -335,7 +335,13 @@ def main():
 
     # Create train and test sets
     for i, cv_split in enumerate(cv_splits):
-        cv_split_str = '' if len(cv_splits) == 1 else f'_split{i}'
+        if len(cv_splits) == 1:
+            cv_split_str = f'_split{i}'
+        else:
+            print("================================")
+            print(f"Split {i}")
+            print(cv_split)
+            cv_split_str = f'_split{i}'
         if 'oct' in args.dataset_name:
             # train_aug = [v2.RandomEqualize(p=0.98)]
             train_aug = [
