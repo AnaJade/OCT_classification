@@ -349,7 +349,11 @@ def main():
                 transforms.RandomEqualize(p=0.0),
             ]
             if args.dataset_name == 'oct_clinical':
-                train_aug = train_aug + [transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),]
+                # train_aug = train_aug + [transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),]
+                train_aug = train_aug + [
+                    # v2.RandomAdjustSharpness(sharpness_factor=3, p=0.3),
+                    v2.RandomAutocontrast(p=0.5),
+                ]
             train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
                                                                            train_aug=train_aug,
                                                                            test_aug=test_aug,
