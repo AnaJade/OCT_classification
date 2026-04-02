@@ -40,7 +40,7 @@ SimCLR:
   arch: mobilenetv3 # resnet18, resnet50, mobilenetv3, vitb16, efficientnetV2s, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
-  max_epochs: 500
+  max_epochs: 1000
   batch_size: 128 # 256 # Must be a multiple of num_same_area if iipp is used
   lr: 0.0003
   weight_decay: 0.00001 # 0.0001
@@ -64,7 +64,7 @@ BYOL:
   arch: mobilenetv3 # resnet18, resnet50, mobilenetv3, vitb16, efficientnetV2s, efficientnetb3, swinv2t, convnextt, pvtv2b0
   use_pretrained: True
   num_workers: 0
-  max_epochs: 500
+  max_epochs: 1000
   batch_size: 64 # True batch size is double if iipp=True
   lr: 0.00001 # 0.0003
   disable_cuda: False

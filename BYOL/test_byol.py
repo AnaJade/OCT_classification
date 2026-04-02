@@ -121,8 +121,7 @@ def main():
 
     # Set all random seeds
     print("Setting random seed...")
-    random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    utils.set_random_seed(args.seed)
 
     # check if gpu training is available
     if not args.disable_cuda and torch.cuda.is_available():

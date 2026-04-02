@@ -1,13 +1,28 @@
-import pathlib
-
-import torch
-import yaml
 import numpy as np
+import pathlib
 import pandas as pd
-import wandb
-
-from scipy.spatial.transform import Rotation
+import random
+import torch
 from torch import nn
+import wandb
+import yaml
+
+
+def set_random_seed(seed: int) -> None:
+    """
+    Sets the seeds at a certain value.
+    :param seed: the value to be set
+    """
+    print("Setting seeds ...... \n")
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic=  True
 
 
 def load_configs(config_path: pathlib.Path) -> dict:

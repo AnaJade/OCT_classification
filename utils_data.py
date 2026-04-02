@@ -44,7 +44,7 @@ import utils
 class OCTDataset(Dataset): # Used in train_moco
     def __init__(self, root: pathlib.Path, split: str, map_df_paths: dict, labels_dict: dict, ch_in=3,
                  sample_within_image=-1, use_iipp=False, num_same_area=-1, transforms=None, pre_shuffle=True,
-                 pre_sample=1, seq_split=False, ratio_sup=1):
+                 pre_sample=1, seq_split=False, ratio_sup=1, overwrite_split=None):
         """
         Dataset object used to pass images to a siamese network
         :param root: dataset root path
@@ -60,6 +60,7 @@ class OCTDataset(Dataset): # Used in train_moco
         :param pre_sample: Ratio of images to be kept
         :param seq_split: Whether to split the dataset per trajectory (first 60% train, 20% valid, last 20% test)
         :param ratio_sup: Ratio of images to be used for supervised training
+        :param overwrite_split: Dict with new split based on pat {'train': [], 'valid': [], 'test': []}
         """
         # Check if re-splitting is needed (in case split in ['train_supervised', 'valid_supervised', 'test_supervised'])
         supervised = 'supervised' in split
@@ -85,6 +86,17 @@ class OCTDataset(Dataset): # Used in train_moco
         self.show = False # For debug purposes
         self.new_labels = 'old_label' in self.map_df.columns
         self.ratio_sup = ratio_sup
+        self.overwrite_split = overwrite_split
+
+        # Redo-split if necessary
+        if self.overwrite_split is not None:
+            map_dfs = pd.concat([pd.read_csv(pathlib.Path(p)) for p in map_df_paths.values()], axis=0)
+            map_dfs.loc[:, 'img_relative_path'] = [pathlib.Path(p) for p in map_dfs['img_relative_path']]
+            map_dfs.loc[:, 'area'] = [p.parts[-2] for p in map_dfs['img_relative_path']]
+            # map_dfs.loc[:, 'pat'] = [int(re.sub(r'[^\d]+', '', p.parts[-2])) for p in map_dfs['img_relative_path']]
+            new_areas = self.overwrite_split[split]
+            self.map_df = map_dfs[map_dfs['area'].isin(new_areas)].copy()
+            self.map_df.loc[:, 'subset'] = split
 
         # Update relative path to image paths
         ascan_per_group = self.map_df['idx_end'].iloc[0]
@@ -151,6 +163,8 @@ class OCTDataset(Dataset): # Used in train_moco
             self.map_df.loc[self.map_df['subset'] != f'{split}_supervised', 'subset'] = split
             self.map_df = self.map_df.drop(columns=['subset_id'])
             print(f"{round((len(self.map_df[self.map_df['subset'].str.contains('supervised')])/len(self.map_df[~self.map_df['subset'].str.contains('supervised')]))*100, 2)}% ({len(self.map_df[self.map_df['subset'].str.contains('supervised')])}/{len(self.map_df[~self.map_df['subset'].str.contains('supervised')])}) of images in the {split} set remain for supervised learning.")
+        elif supervised and self.ratio_sup == 1:
+            self.map_df.loc[:, 'subset'] = f'{split}_supervised'
 
         if 'subset' in self.map_df.columns:
             if supervised: # subset is not None:
@@ -318,7 +332,7 @@ class OCTDataset(Dataset): # Used in train_moco
 
 
 def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, test_aug:list,
-                         mean:list, std:list, supervised=False, ratio_sup=1, shuffle=False, seq_split=False):
+                         mean:list, std:list, supervised=False, ratio_sup=1, shuffle=False, seq_split=False, overwrite_split=None):
     img_transforms = [v2.ToTensor(),
                       v2.Resize((args.img_reshape, args.img_reshape), interpolation=InterpolationMode.BILINEAR),
                       NormTransform()
@@ -353,7 +367,8 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                                transforms=transforms.Compose(train_augs),
                                pre_sample=args.dataset_sample,
                                seq_split=seq_split,
-                               ratio_sup=ratio_sup)
+                               ratio_sup=ratio_sup,
+                               overwrite_split=overwrite_split)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size,
                               num_workers=0, drop_last=False, shuffle=shuffle)
@@ -367,7 +382,8 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                                transforms=transforms.Compose(test_augs),
                                pre_sample=args.dataset_sample,
                                seq_split=seq_split,
-                               ratio_sup=ratio_sup)
+                               ratio_sup=ratio_sup,
+                               overwrite_split=overwrite_split)
 
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size,
                               num_workers=0, drop_last=False, shuffle=False)
@@ -381,7 +397,8 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
                               transforms=transforms.Compose(test_augs),
                               pre_sample=args.dataset_sample,
                               seq_split=seq_split,
-                              ratio_sup=ratio_sup)
+                              ratio_sup=ratio_sup,
+                              overwrite_split=overwrite_split)
 
     test_loader = DataLoader(test_dataset, batch_size=batch_size,
                              num_workers=0, drop_last=False, shuffle=False)
@@ -389,8 +406,40 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
 
 
 def get_supervised_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, test_aug:list,
-                                    mean:list, std:list, supervised=True, ratio_sup=1, shuffle=False, seq_split=False):
-    return get_oct_data_loaders(root_path, args, batch_size, train_aug, test_aug, mean, std, True, ratio_sup, shuffle, seq_split)
+                                    mean:list, std:list, supervised=True, ratio_sup=1, shuffle=False, seq_split=False, overwrite_split=None):
+    return get_oct_data_loaders(root_path, args, batch_size, train_aug, test_aug, mean, std, True, ratio_sup, shuffle, seq_split, overwrite_split)
+
+
+def get_cross_valid_splits(args:argparse.Namespace, k: int) -> list:
+    """
+    Take the
+    :param root_path: dataset root path
+    :param args: dataset arguments
+    :param k: Number of splits
+    :return: List of splits {'train': [], 'valid': [], 'test': []}
+    """
+    subsets = ['train', 'valid', 'test']
+    splits = []
+    # Load mapping dfs
+    map_dfs = pd.concat([pd.read_csv(pathlib.Path(p)) for p in args.map_df_paths.values()], axis=0)
+    map_dfs.loc[:, 'img_relative_path'] = [pathlib.Path(p) for p in map_dfs['img_relative_path']]
+    map_dfs.loc[:, 'area'] = [p.parts[-2] for p in map_dfs['img_relative_path']]
+    # map_dfs.loc[:, 'pat'] = [int(re.sub(r'[^\d]+', '', p.parts[-2])) for p in map_dfs['img_relative_path']]
+
+    # Get dict for current split
+    base_split = {s: map_dfs[map_dfs['subset'] == s]['area'].unique().tolist() for s in subsets}
+    splits.append(base_split)
+
+    # Split info
+    all_pats = sum(base_split.values(), [])
+    all_pats = sorted(all_pats)
+    pat_per_subset = {s: len(p) for s, p in base_split.items()}
+
+    # Generate new k splits
+    for i in range(k-1):
+        splits.append({s:random.sample(all_pats, k=n) for s, n in pat_per_subset.items()})
+
+    return splits
 
 
 def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):

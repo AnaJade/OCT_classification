@@ -34,7 +34,7 @@ from SimCLR.models.resnet_simclr import FeatureModelSimCLR
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround, NormTransform
+from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround, NormTransform, get_cross_valid_splits
 
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
@@ -317,95 +317,102 @@ def main():
 
     # Set all random seeds
     print("Setting random seed...")
-    random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    utils.set_random_seed(args.seed)
 
     # check if gpu training is available
     if not args.disable_cuda and torch.cuda.is_available():
         args.device = torch.device(f'cuda:{args.gpu_index}')
-        cudnn.benchmark = True
     else:
         args.device = torch.device('cpu')
         args.gpu_index = -1
 
-    # Create train and test sets
-    if 'oct' in args.dataset_name:
-        # train_aug = [v2.RandomEqualize(p=0.98)]
-        train_aug = [
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomVerticalFlip(p=0.5),
-            transforms.RandomEqualize(p=0.5),
-            RandomWrapAround(dim=-1, p=1.0),
-            RandomWrapAround(dim=-2, p=1.0)
-        ]
-        test_aug = [
-            transforms.RandomEqualize(p=0.0),
-        ]
-        if args.dataset_name == 'oct_clinical':
-            train_aug = train_aug + [transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),]
-        train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
-                                                                       train_aug=train_aug,
-                                                                       test_aug=test_aug,
-                                                                       mean=mean[args.dataset_name],
-                                                                       std=std[args.dataset_name],
-                                                                       ratio_sup=args.ratio_sup,
-                                                                       shuffle=True,
-                                                                       seq_split=args.sequential_split)
-    else:
-        train_loader, test_loader = get_stl10_data_loaders(args.data, args.batch_size, shuffle=False,
-                                                           download=False)
-
-    # Define model
-    model = SupervisedModel(args, chkpt_file)
-
-    # Finetune weights
-    print(f"Finetune model")
-    pos_weights = None
     if args.dataset_name == 'oct_clinical':
-        # Define pos_weights
-        # https://www.codegenes.net/blog/pytorch-bcewithlogitsloss-pos_weight/#handling-class-imbalance
-        class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
-        pos_weights = torch.Tensor([class_counts.loc[1.0, 'img_count'] / class_counts.loc[0.0, 'img_count']]).to(
-            args.device)
-        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+        # Generate cross-validation split
+        cv_splits = get_cross_valid_splits(args, k=3)
+        # cv_splits = [None]
     else:
-        criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
-    opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
-    # scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        opt,
-        mode='min',
-        factor=0.5,
-        patience=2
-    )
-    model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt,
-                   scheduler=scheduler)
+        cv_splits = [None]
 
-    # Get test set performance
-    test_preds, test_labels = model.test(test_loader)
+    # Create train and test sets
+    for i, cv_split in enumerate(cv_splits):
+        cv_split_str = '' if len(cv_splits) == 1 else f'_split{i}'
+        if 'oct' in args.dataset_name:
+            # train_aug = [v2.RandomEqualize(p=0.98)]
+            train_aug = [
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomVerticalFlip(p=0.5),
+                transforms.RandomEqualize(p=0.5),
+                RandomWrapAround(dim=-1, p=1.0),
+                RandomWrapAround(dim=-2, p=1.0)
+            ]
+            test_aug = [
+                transforms.RandomEqualize(p=0.0),
+            ]
+            if args.dataset_name == 'oct_clinical':
+                train_aug = train_aug + [transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),]
+            train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
+                                                                           train_aug=train_aug,
+                                                                           test_aug=test_aug,
+                                                                           mean=mean[args.dataset_name],
+                                                                           std=std[args.dataset_name],
+                                                                           ratio_sup=args.ratio_sup,
+                                                                           shuffle=True,
+                                                                           seq_split=args.sequential_split,
+                                                                           overwrite_split=cv_split)
+        else:
+            train_loader, test_loader = get_stl10_data_loaders(args.data, args.batch_size, shuffle=False,
+                                                               download=False)
 
-    # Save predictions
-    preds_df = pd.DataFrame.from_dict({'pred': test_preds}, orient='columns')
-    preds_df = pd.concat([test_loader.dataset.map_df.copy(), preds_df], axis=1)
-    preds_path = f'preds_{args.dataset_name}_{args.ratio_sup * 100}p.csv'
-    preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
+        # Define model
+        model = SupervisedModel(args, chkpt_file)
 
-    # Calculate metrics
-    print(f"Test set results using {args.arch} backbone (Finetune from {args.approach}, with {args.ratio_sup*100}% of {args.dataset_name}):")
-    report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
-    print(report)
+        # Finetune weights
+        print(f"Finetune model")
+        if args.dataset_name == 'oct_clinical':
+            # Define pos_weights
+            # https://www.codegenes.net/blog/pytorch-bcewithlogitsloss-pos_weight/#handling-class-imbalance
+            class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
+            pos_weights = torch.Tensor([class_counts.loc[1.0, 'img_count'] / class_counts.loc[0.0, 'img_count']]).to(
+                args.device)
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+        else:
+            criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
+        opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
+        # scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            opt,
+            mode='min',
+            factor=0.5,
+            patience=2
+        )
+        model.finetune(train_loader=train_loader, valid_loader=valid_loader, criterion=criterion, opt=opt,
+                       scheduler=scheduler)
 
-    # Get confusion matrix display
-    cm = confusion_matrix(test_labels, test_preds)
-    cm_plot = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
-    cm_plot.plot()
-    plt.title('Confusion matrix')
-    plt.xlabel('Predicted label')
-    plt.ylabel('True label')
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    plt.savefig(args.save_folder.joinpath(f'confusion_matrix_{args.dataset_name}.png'))
-    plt.show()
+        # Get test set performance
+        test_preds, test_labels = model.test(test_loader)
+
+        # Save predictions
+        preds_df = pd.DataFrame.from_dict({'pred': test_preds}, orient='columns')
+        preds_df = pd.concat([test_loader.dataset.map_df.copy(), preds_df], axis=1)
+        preds_path = f'preds_{args.dataset_name}_{args.ratio_sup * 100}p{cv_split_str}.csv'
+        preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
+
+        # Calculate metrics
+        print(f"Test set results using {args.arch} backbone (Finetune from {args.approach}, with {args.ratio_sup*100}% of {args.dataset_name}):")
+        report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
+        print(report)
+
+        # Get confusion matrix display
+        cm = confusion_matrix(test_labels, test_preds)
+        cm_plot = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+        cm_plot.plot()
+        plt.title('Confusion matrix')
+        plt.xlabel('Predicted label')
+        plt.ylabel('True label')
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        plt.savefig(args.save_folder.joinpath(f'confusion_matrix_{args.dataset_name}{cv_split_str}.png'))
+        plt.show()
 
 
 if __name__ == "__main__":
