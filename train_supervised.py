@@ -240,9 +240,16 @@ def main():
                 transforms.RandomEqualize(p=0.0),
             ]
             if args.dataset_name == 'oct_clinical':
-                # train_aug = train_aug + [transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),]
                 train_aug = train_aug + [
-                    # v2.RandomAdjustSharpness(sharpness_factor=3, p=0.3),
+                    v2.RandomApply([v2.ColorJitter(brightness=0.25, contrast=0.25)], p = 0.5),
+                    v2.RandomResizedCrop(size=args.img_reshape, scale=(0.75, 1), interpolation=InterpolationMode.BILINEAR),
+                    # https://arxiv.org/abs/2409.13351v1
+                    v2.RandomApply([v2.RandomAffine(degrees=5, interpolation=InterpolationMode.BILINEAR)], p=0.5),
+                    # v2.RandomApply([v2.RandomAffine(degrees=5, shear=5, interpolation=InterpolationMode.BILINEAR)], p=0.5),
+                    # v2.RandomApply([v2.ElasticTransform(alpha=100, sigma=[1e-5, 10])], p=0.5), # Long elastic
+                    # v2.RandomApply([v2.ElasticTransform(alpha=20, sigma=[1e-5, 2])], p=0.5),  # Short elastic
+                    # v2.RandomApply([v2.GaussianBlur(kernel_size=5)], p=0.5),
+                    # v2.RandomApply([v2.GaussianNoise(mean=0, sigma=0.1, clip=True)], p=0.5), # https://doi.org/10.1002/eng2.70110
                     v2.RandomAutocontrast(p=0.5),
                                          ]
             train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
@@ -264,6 +271,10 @@ def main():
         if args.sequential_split:
             model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
                 f"{model.finetune_best_weights_path.stem}_seqSplit{cv_split_str}.pt")
+
+        if len(cv_splits) > 1:
+            model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
+                f"{model.finetune_best_weights_path.stem}{cv_split_str}.pt")
 
         # Update labels
         if lbls_to_keep is not None:
@@ -362,6 +373,8 @@ def main():
 
         plt.savefig(args.save_folder.joinpath(cm_path))
         plt.show()
+
+        del(model)
 
 
 if __name__ == "__main__":

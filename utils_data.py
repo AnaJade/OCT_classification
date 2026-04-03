@@ -441,7 +441,7 @@ def get_cross_valid_splits(args:argparse.Namespace, k: int) -> list:
         splits.append({'train': all_pats[:pat_per_subset['train']],
                        'valid': all_pats[pat_per_subset['train']:pat_per_subset['train']+pat_per_subset['valid']],
                        'test': all_pats[-pat_per_subset['test']:]})
-
+        assert len([p for ps in splits[i+1].values() for p in ps]) == len(list(set([p for ps in splits[i+1].values() for p in ps])))
     return splits
 
 
