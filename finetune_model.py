@@ -394,7 +394,7 @@ def main():
             # Define pos_weights
             # https://www.codegenes.net/blog/pytorch-bcewithlogitsloss-pos_weight/#handling-class-imbalance
             class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
-            pos_weights = torch.Tensor([class_counts.loc[1.0, 'img_count'] / class_counts.loc[0.0, 'img_count']]).to(
+            pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
                 args.device)
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
         else:

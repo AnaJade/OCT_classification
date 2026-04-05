@@ -436,12 +436,28 @@ def get_cross_valid_splits(args:argparse.Namespace, k: int) -> list:
     pat_per_subset = {s: len(p) for s, p in base_split.items()}
 
     # Generate new k splits
-    for i in range(k-1):
+    i = 0
+    while i < k:
         random.shuffle(all_pats)
-        splits.append({'train': all_pats[:pat_per_subset['train']],
-                       'valid': all_pats[pat_per_subset['train']:pat_per_subset['train']+pat_per_subset['valid']],
-                       'test': all_pats[-pat_per_subset['test']:]})
-        assert len([p for ps in splits[i+1].values() for p in ps]) == len(list(set([p for ps in splits[i+1].values() for p in ps])))
+        cv_split = {'train': all_pats[:pat_per_subset['train']],
+                    'valid': all_pats[pat_per_subset['train']:pat_per_subset['train']+pat_per_subset['valid']],
+                    'test': all_pats[-pat_per_subset['test']:]}
+        # Check if all labels are in each split
+        map_dfs_cv = map_dfs.copy()
+        map_dfs_cv.loc[:, 'subset'] = ''
+        for s, p in cv_split.items():
+            map_dfs_cv.loc[map_dfs_cv['area'].isin(p), 'subset'] = s
+        nb_lbls_per_split = map_dfs_cv.groupby('subset').agg({'label': 'nunique', 'area': lambda x: ', '.join(x.unique())}).rename(columns={'label': 'lbl_count', 'area': 'patients'})
+        # DEBUG: Print lbls per split
+        # print(f"iter {i}")
+        # print(nb_lbls_per_split)
+        # Add split to c-v splits
+        if (len(nb_lbls_per_split['lbl_count'].unique()) == 1) and (nb_lbls_per_split['lbl_count'].unique().tolist()[0] == 2):
+            splits.append(cv_split)
+            assert len([p for ps in splits[i + 1].values() for p in ps]) == len(
+                list(set([p for ps in splits[i + 1].values() for p in ps])))
+            i = i+1
+
     return splits
 
 
