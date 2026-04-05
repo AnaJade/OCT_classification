@@ -105,6 +105,7 @@ class SupervisedModel(object):
 
         # Update classification head
         num_outputs = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
+        self.sigmoid = nn.Sigmoid()
         if self.args.approach == 'byol':
             self.model = utils.set_classifier_head(self.model, num_outputs)
         elif self.args.approach == 'simclr':
@@ -163,7 +164,7 @@ class SupervisedModel(object):
                     if labels.shape[-1] > 1:
                         preds = torch.argmax(outputs, dim=1)
                     else:
-                        preds = (outputs > 0.5).to(torch.float16)
+                        preds = (self.sigmoid(outputs) > 0.5).to(torch.float16)
                     correct += (preds == labels_idx).sum().item()
                     total += labels.size(0)
                 avg_epoch_valid_loss = float(torch.mean(torch.stack(avg_epoch_valid_loss)).cpu().detach().numpy())
@@ -198,7 +199,7 @@ class SupervisedModel(object):
                     preds = torch.argmax(outputs, dim=1)
                     labels = torch.argmax(labels, dim=1)
                 else:
-                    preds = (outputs > 0.5).to(torch.float16)
+                    preds = (self.sigmoid(outputs) > 0.5).to(torch.float16)
                     labels = labels
                 preds_all.append(preds)
                 labels_all.append(labels)
@@ -394,8 +395,9 @@ def main():
             # Define pos_weights
             # https://www.codegenes.net/blog/pytorch-bcewithlogitsloss-pos_weight/#handling-class-imbalance
             class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
-            pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
-                args.device)
+            # pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
+            #     args.device)
+            pos_weights = None
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
         else:
             criterion = nn.CrossEntropyLoss(label_smoothing=0.2)

@@ -437,7 +437,7 @@ def get_cross_valid_splits(args:argparse.Namespace, k: int) -> list:
 
     # Generate new k splits
     i = 0
-    while i < k:
+    while i < k-1:
         random.shuffle(all_pats)
         cv_split = {'train': all_pats[:pat_per_subset['train']],
                     'valid': all_pats[pat_per_subset['train']:pat_per_subset['train']+pat_per_subset['valid']],
