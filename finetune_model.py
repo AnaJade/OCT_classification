@@ -23,7 +23,7 @@ from torchvision.transforms import v2, InterpolationMode
 from torchvision import datasets
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc
 
 from BYOL.feature_model import get_backbone
 from BYOL.test_byol import  get_stl10_data_loaders
@@ -104,7 +104,10 @@ class SupervisedModel(object):
             self.model.load_state_dict(state_dict, strict=False)
 
         # Update classification head
-        num_outputs = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
+        if self.args.use_bce:
+            num_outputs = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
+        else:
+            num_outputs = len(self.args.labels_dict.keys())
         self.sigmoid = nn.Sigmoid()
         if self.args.approach == 'byol':
             self.model = utils.set_classifier_head(self.model, num_outputs)
@@ -130,14 +133,13 @@ class SupervisedModel(object):
             for images, labels in tqdm(train_loader, desc='Training'):
                 images = images.to(self.args.device)
                 labels = labels.to(self.args.device)
-                if labels.shape[-1] > 1:
+                if labels.shape[-1] > 1 or self.args.use_bce:
                     # One-hot → class index
-                    labels = torch.argmax(labels, dim=1)
-                else:
-                    # labels = labels.unsqueeze(1)
-                    pass
+                    labels = torch.argmax(labels, dim=1) # shape [b,]
+                    if self.args.use_bce:
+                        labels = labels.unsqueeze(1).to(torch.float16)
                 opt.zero_grad()
-                outputs = self.model(images)
+                outputs = self.model(images) # shape [b, n_outputs]
                 batch_loss = criterion(outputs, labels)
                 batch_loss.backward()
                 opt.step()
@@ -153,15 +155,17 @@ class SupervisedModel(object):
                 for images, labels in tqdm(valid_loader, desc='Validation'):
                     images = images.to(self.args.device)
                     labels = labels.to(self.args.device)
-                    if labels.shape[-1] > 1:
+                    if labels.shape[-1] > 1 or self.args.use_bce:
                         # One-hot → class index
-                        labels_idx = torch.argmax(labels, dim=1)
+                        labels_idx = torch.argmax(labels, dim=1)  # shape [b,]
+                        if self.args.use_bce:
+                            labels_idx = labels_idx.unsqueeze(1).to(torch.float16)
                     else:
                         labels_idx = labels
                     outputs = self.model(images)
                     batch_loss = criterion(outputs, labels_idx)
                     avg_epoch_valid_loss.append(batch_loss)
-                    if labels.shape[-1] > 1:
+                    if labels.shape[-1] > 1 and not self.args.use_bce:
                         preds = torch.argmax(outputs, dim=1)
                     else:
                         preds = (self.sigmoid(outputs) > 0.5).to(torch.float16)
@@ -188,24 +192,30 @@ class SupervisedModel(object):
         self.model.load_state_dict(self.finetune_best_weights, strict=False)
         preds_all = []
         labels_all = []
+        outputs_all = []
         self.model.eval()
         print(f'Getting test set predictions...')
         with torch.no_grad():
             for images, labels in tqdm(test_loader, desc='Testing'):
                 images = images.to(self.args.device)
                 outputs = self.model(images)
-                if labels.shape[-1] > 1:
+                if labels.shape[-1] > 1 and not self.args.use_bce:
                     # One-hot → class index
                     preds = torch.argmax(outputs, dim=1)
                     labels = torch.argmax(labels, dim=1)
                 else:
                     preds = (self.sigmoid(outputs) > 0.5).to(torch.float16)
-                    labels = labels
+                    if self.args.use_bce:
+                        labels = torch.argmax(labels, dim=1)
+                    else:
+                        labels = labels
+                outputs_all.append(outputs)
                 preds_all.append(preds)
                 labels_all.append(labels)
+        outputs_all = torch.concat(outputs_all, dim=0).detach().to('cpu')
         preds_all = torch.concat(preds_all, dim=0).detach().to('cpu')
         labels_all = torch.concat(labels_all, dim=0).detach().to('cpu')
-        return preds_all, labels_all
+        return preds_all, labels_all, outputs_all
 
 
 def main():
@@ -398,7 +408,10 @@ def main():
             # pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
             #     args.device)
             pos_weights = None
-            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+            if args.use_bce:
+                criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+            else:
+                criterion = nn.CrossEntropyLoss()
         else:
             criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
         opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
@@ -413,7 +426,7 @@ def main():
                        scheduler=scheduler)
 
         # Get test set performance
-        test_preds, test_labels = model.test(test_loader)
+        test_preds, test_labels, test_outputs = model.test(test_loader)
 
         # Save predictions
         preds_df = pd.DataFrame.from_dict({'pred': test_preds.squeeze(-1), 'pred_labels': test_labels.squeeze(-1)}, orient='columns')
@@ -439,6 +452,26 @@ def main():
         plt.tight_layout()
         plt.savefig(args.save_folder.joinpath(f'confusion_matrix_{args.dataset_name}{cv_split_str}.png'))
         plt.show()
+        plt.close()
+
+        # Plot ROC curve if 2 classes
+        if len(args.labels_dict) == 2 and args.use_bce:
+            fpr, tpr, thresholds = roc_curve(test_labels, test_outputs)
+            roc_auc = auc(fpr, tpr)
+            # Plot the ROC curve
+            plt.figure()
+            plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % roc_auc)
+            plt.plot([0, 1], [0, 1], 'k--', label='No Skill')
+            plt.xlim([0.0, 1.0])
+            plt.ylim([0.0, 1.05])
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title('ROC Curve')
+            plt.legend()
+            roc_path = cm_path = f"roc_{args.dataset_name}{cv_split_str}.png"
+            plt.savefig(args.save_folder.joinpath(roc_path))
+            plt.show()
+            plt.close()
 
         del(model)
 

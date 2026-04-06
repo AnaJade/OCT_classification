@@ -217,6 +217,17 @@ class OCTDataset(Dataset): # Used in train_moco
         if self.pre_shuffle:
             self.map_df = self.map_df.sample(frac=1).reset_index(drop=True)
 
+        # Print number of images per area per label
+        print(f"Image distribution for the {split} set")
+        if self.map_df_sampling is None:
+            print(self.map_df.sort_values('area').groupby('label_str').agg({'img_relative_path': 'count', 'area': lambda x: ', '.join(x.unique())}).rename(columns={'img_relative_path': 'n_imgs', 'area': 'areas'}))
+        else:
+            # Merge both back and get stats
+            map_df_all = pd.concat([self.map_df, self.map_df_sampling], axis=0)
+            print(map_df_all.sort_values('area').groupby('label_str').agg(
+                {'img_relative_path': 'count', 'area': lambda x: ', '.join(x.unique())}).rename(
+                columns={'img_relative_path': 'n_imgs', 'area': 'areas'}))
+
     def __len__(self):
         if self.use_iipp and self.num_same_area < 1:
             return len(self.map_df['pair_id'].unique())
@@ -308,10 +319,11 @@ class OCTDataset(Dataset): # Used in train_moco
                 data = self.transforms(data)
 
         # Convert labels to one-hot
-        if len(self.label_dict) > 2:
-            label = torch.nn.functional.one_hot(torch.tensor(label), len(self.label_dict)).to(torch.float16)
-        else:
-            label = torch.Tensor([label]).to(torch.float16)
+        # if len(self.label_dict) > 2:
+        #     label = torch.nn.functional.one_hot(torch.tensor(label), len(self.label_dict)).to(torch.float16)
+        # else:
+        #     label = torch.Tensor([label]).to(torch.float16)
+        label = torch.nn.functional.one_hot(torch.tensor(label), len(self.label_dict)).to(torch.float16)
         # Add metadata if iipp is used
         if self.use_iipp:
             metadata = self.map_df['area_id'].iloc[idx]

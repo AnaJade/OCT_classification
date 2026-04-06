@@ -94,6 +94,7 @@ finetune:
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit # X:\Boudreault
   dataset_path_linux: /data/Boudreault
   dataset_path_hpc: /usertemp/mts/cab8351
+  use_bce: False
   sequential_split: False
   img_channel: 1
   sample_within_image: -1

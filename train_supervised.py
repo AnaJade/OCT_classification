@@ -21,7 +21,7 @@ import torchvision.transforms as transforms
 from torchvision.transforms import v2, InterpolationMode
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc
 
 from BYOL.feature_model import get_backbone
 from BYOL.test_byol import get_stl10_data_loaders
@@ -80,7 +80,10 @@ class FullSupervisedModel(SupervisedModel):
             self.finetune_best_weights = None
 
         # Update classification head
-        num_outputs = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
+        if self.args.use_bce:
+            num_outputs = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
+        else:
+            num_outputs = len(self.args.labels_dict.keys())
         self.model = utils.set_classifier_head(self.model, num_outputs)
         self.model.to(args.device)
 
@@ -104,6 +107,7 @@ def main():
             dataset_path = pathlib.Path(configs['finetune']['dataset_path_linux'])
     elif platform == "win32":
         dataset_path = pathlib.Path(configs['finetune']['dataset_path_windows'])
+    args.use_bce = configs['finetune']['use_bce']
     args.sequential_split = configs['finetune']['sequential_split']
     labels = configs['data']['labels']
     trajectories = configs['data']['trajectories']
@@ -325,7 +329,10 @@ def main():
             # pos_weights = torch.Tensor([class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
             #     args.device)
             pos_weights = None
-            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+            if args.use_bce:
+                criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+            else:
+                criterion = nn.CrossEntropyLoss()
         else:
             criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
         opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
@@ -340,7 +347,7 @@ def main():
                        scheduler=scheduler)
 
         # Get test set performance
-        test_preds, test_labels = model.test(test_loader)
+        test_preds, test_labels, test_outputs = model.test(test_loader)
 
         # Save predictions
         preds_df = pd.DataFrame.from_dict({'pred': test_preds.squeeze(-1), 'pred_labels': test_labels.squeeze(-1)}, orient='columns')
@@ -374,6 +381,26 @@ def main():
 
         plt.savefig(args.save_folder.joinpath(cm_path))
         plt.show()
+        plt.close()
+
+        # Plot ROC curve if 2 classes
+        if len(args.labels_dict) == 2 and args.use_bce:
+            fpr, tpr, thresholds = roc_curve(test_labels, test_outputs)
+            roc_auc = auc(fpr, tpr)
+            # Plot the ROC curve
+            plt.figure()
+            plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % roc_auc)
+            plt.plot([0, 1], [0, 1], 'k--', label='No Skill')
+            plt.xlim([0.0, 1.0])
+            plt.ylim([0.0, 1.05])
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title('ROC Curve')
+            plt.legend()
+            roc_path = cm_path = f"roc_{args.dataset_name}{cv_split_str}.png"
+            plt.savefig(args.save_folder.joinpath(roc_path))
+            plt.show()
+            plt.close()
 
         del(model)
 
