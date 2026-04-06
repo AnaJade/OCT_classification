@@ -449,6 +449,7 @@ def get_cross_valid_splits(args:argparse.Namespace, k: int) -> list:
 
     # Generate new k splits
     i = 0
+    overall_i = 0
     while i < k-1:
         random.shuffle(all_pats)
         cv_split = {'train': all_pats[:pat_per_subset['train']],
@@ -465,10 +466,27 @@ def get_cross_valid_splits(args:argparse.Namespace, k: int) -> list:
         # print(nb_lbls_per_split)
         # Add split to c-v splits
         if (len(nb_lbls_per_split['lbl_count'].unique()) == 1) and (nb_lbls_per_split['lbl_count'].unique().tolist()[0] == 2):
-            splits.append(cv_split)
-            assert len([p for ps in splits[i + 1].values() for p in ps]) == len(
-                list(set([p for ps in splits[i + 1].values() for p in ps])))
-            i = i+1
+            # Check for label balance
+            img_count_per_subset = map_dfs_cv.sort_values('area').groupby(['subset', 'label']).agg(
+            {'img_relative_path': 'count', 'area': lambda x: ', '.join(x.unique())}).rename(
+            columns={'img_relative_path': 'n_imgs', 'area': 'areas'}).reset_index()
+            img_count_per_subset.loc[:, 'ratio_diff'] = np.nan
+            for s in subsets:
+                total_imgs_in_subset = img_count_per_subset.loc[img_count_per_subset['subset'] == s, 'n_imgs'].sum()
+                ratio_healthy = img_count_per_subset.loc[(img_count_per_subset['subset'] == s) & (
+                            img_count_per_subset['label'] == 'Healthy'), 'n_imgs'].iloc[0] / total_imgs_in_subset
+                ratio_lesion = img_count_per_subset.loc[(img_count_per_subset['subset'] == s) & (
+                        img_count_per_subset['label'] == 'Lesion'), 'n_imgs'].iloc[0] / total_imgs_in_subset
+                img_count_per_subset.loc[img_count_per_subset['subset'] == s, 'ratio_diff'] = ratio_lesion - ratio_healthy
+            # Overall ratio -> Healthy = 0.428, Lesion = 0.572
+            # Base diff: Train_diff = 0.092, Valid_diff = 0.0898, Test_diff = 0.275
+            if (img_count_per_subset['ratio_diff'].max() < 0.3) and (img_count_per_subset['ratio_diff'].min() > 0):
+                splits.append(cv_split)
+                assert len([p for ps in splits[i + 1].values() for p in ps]) == len(
+                    list(set([p for ps in splits[i + 1].values() for p in ps])))
+                i = i+1
+                print(f"Found cross-validation split {i} after {overall_i} iterations.")
+        overall_i = overall_i + 1
 
     return splits
 
