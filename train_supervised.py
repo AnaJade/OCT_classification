@@ -175,7 +175,10 @@ def main():
         # lbls_to_keep = ['lamb_heart_fat', 'chicken_stomach_inside']
         # lbls_to_keep = ['lamb_heart_muscle', 'chicken_stomach_outside', 'chicken_stomach_inside']
         # lbls_to_keep = ['chicken_heart_muscle', 'lamb_heart_muscle']
+        # lbls_to_keep = ['lamb_liver', 'lamb_testicle']
     if lbls_to_keep is not None:
+        if len(lbls_to_keep) == 2:
+            args.use_bce = configs['finetune']['use_bce']
         labels = lbls_to_keep
         args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
         num_cluster_dict['oct'] = len(labels)
@@ -225,7 +228,7 @@ def main():
     # Create train and test sets
     for i, cv_split in enumerate(cv_splits):
         if len(cv_splits) == 1:
-            cv_split_str = f'_split{i}'
+            cv_split_str = f''
         else:
             print("================================")
             print(f"Split {i}")
@@ -334,7 +337,10 @@ def main():
             else:
                 criterion = nn.CrossEntropyLoss()
         else:
-            criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
+            if args.use_bce:
+                criterion = nn.BCEWithLogitsLoss()
+            else:
+                criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
         opt = torch.optim.AdamW(model.model.parameters(), lr=args.lr, weight_decay=1e-5)
         # scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=1, gamma=0.1)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(

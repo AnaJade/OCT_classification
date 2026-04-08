@@ -116,7 +116,8 @@ class OCTDataset(Dataset): # Used in train_moco
                 print(f"{extra_labels} label found in mapping dataset but not in label dict")
                 print(f"Removing images...")
                 self.map_df = self.map_df.dropna(axis=0)
-
+        else:
+            self.map_df = self.map_df.dropna(subset=['label'], axis=0).copy()
         self.map_df['area'] = [re.sub('|'.join(f'{f}_' for f in self.label_dict.values()), '', p.parts[1]) for p in self.map_df['img_relative_path']]
         self.map_df['trajectory'] = ['_'.join(p.stem.split('_')[:-2]) for p in self.map_df['img_relative_path']]
         self.map_df['area_id'] = self.map_df.groupby(['label', 'area']).ngroup()
