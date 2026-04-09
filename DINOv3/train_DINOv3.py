@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from torchvision.transforms import v2, InterpolationMode
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc
 
 from dinov3_model import DINO_LoRA
 
@@ -28,7 +28,7 @@ from dinov3_model import DINO_LoRA
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround
+from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround, get_cross_valid_splits
 
 
 # Set up the argument parser
@@ -84,6 +84,7 @@ if __name__ == "__main__":
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
     args.dataset_name = configs['DINO']['dataset_name']
+    args.use_bce = configs['DINO']['use_bce'] if args.dataset_name == 'oct_clinical' else False
     if 'oct' in args.dataset_name:
         mean[args.dataset_name] = 3 * [configs['data']['img_mean'] / 255]
         std[args.dataset_name] = 3 * [configs['data']['img_std'] / 255]
@@ -196,74 +197,57 @@ if __name__ == "__main__":
         args.device = torch.device('cpu')
         args.gpu_index = -1
 
-    # Create train, valid and test sets
-    train_aug = [
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomVerticalFlip(p=0.5),
-        transforms.RandomEqualize(p=0.5),
-        RandomWrapAround(dim=-1, p=1.0),
-        RandomWrapAround(dim=-2, p=1.0)
-    ]
-    test_aug = [
-        transforms.RandomEqualize(p=0.0),
-    ]
     if args.dataset_name == 'oct_clinical':
-        train_aug = train_aug + [
-            transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8), ]
-    train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
-                                                                              train_aug=train_aug,
-                                                                              test_aug=test_aug,
-                                                                              mean=mean[args.dataset_name],
-                                                                              std=std[args.dataset_name],
-                                                                              ratio_sup=args.ratio_sup,
-                                                                              shuffle=True,
-                                                                              seq_split=False)
+        # Generate cross-validation split
+        cv_splits = get_cross_valid_splits(args, k=3)
+        # cv_splits = [None]
+    else:
+        cv_splits = [None]
 
-    with torch.cuda.device(args.gpu_index):
-            # feature_model, feature_layer = get_backbone(args.arch, args.use_pretrained)
-            # feature_model = timm.create_model('convnext_tiny.dinov3_lvd1689m',
-            #                               pretrained=True,
-            #                               num_classes=0)
-            # DEBUG
-            # Find where dino matches convnextt
-            # convnextt = models.convnext_tiny(weights='DEFAULT')
-            # children_convnextt = [*convnextt.children()]
-            # children_dino_convnext = [*feature_model.children()]
-            # modules_convnextt = dict([*convnextt.named_modules()])
-            # modules_dino = dict([*feature_model.named_modules()])
+    for i, cv_split in enumerate(cv_splits):
+        if len(cv_splits) == 1:
+            cv_split_str = f''
+        else:
+            print("================================")
+            print(f"Split {i}")
+            print(cv_split)
+            cv_split_str = f'_split{i}'
 
-            # vit-s
-            # dino_vit = timm.create_model('vit_small_patch16_dinov3.lvd1689m', pretrained=True)
-            # vitb = models.vit_b_16(weights='DEFAULT')
-            # children_vitb = [*vitb.children()]
-            # children_dino_vitb = [*dino_vit.children()]
-            # modules_vitb = dict([*vitb.named_modules()])
-            # modules_dino_vitb = dict([*dino_vit.named_modules()])
+        # Create train, valid and test sets
+        train_aug = [
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),
+            transforms.RandomEqualize(p=0.5),
+            RandomWrapAround(dim=-1, p=1.0),
+            RandomWrapAround(dim=-2, p=1.0)
+        ]
+        test_aug = [
+            transforms.RandomEqualize(p=0.0),
+        ]
+        if args.dataset_name == 'oct_clinical':
+            train_aug = train_aug + [
+                v2.RandomApply([v2.ColorJitter(brightness=0.25, contrast=0.25)], p=0.5),
+                v2.RandomResizedCrop(size=args.img_reshape, scale=(0.75, 1), interpolation=InterpolationMode.BILINEAR),
+                # https://arxiv.org/abs/2409.13351v1
+                v2.RandomApply([v2.RandomAffine(degrees=5, interpolation=InterpolationMode.BILINEAR)], p=0.5),
+                # v2.RandomApply([v2.RandomAffine(degrees=5, shear=5, interpolation=InterpolationMode.BILINEAR)], p=0.5),
+                # v2.RandomApply([v2.ElasticTransform(alpha=100, sigma=[1e-5, 10])], p=0.5), # Long elastic
+                # v2.RandomApply([v2.ElasticTransform(alpha=20, sigma=[1e-5, 2])], p=0.5),  # Short elastic
+                # v2.RandomApply([v2.GaussianBlur(kernel_size=5)], p=0.5),
+                # v2.RandomApply([v2.GaussianNoise(mean=0, sigma=0.1, clip=True)], p=0.5), # https://doi.org/10.1002/eng2.70110
+                v2.RandomAutocontrast(p=0.5),
+            ]
+        train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
+                                                                                  train_aug=train_aug,
+                                                                                  test_aug=test_aug,
+                                                                                  mean=mean[args.dataset_name],
+                                                                                  std=std[args.dataset_name],
+                                                                                  ratio_sup=args.ratio_sup,
+                                                                                  shuffle=True,
+                                                                                  seq_split=False,
+                                                                                  overwrite_split=cv_split)
 
-
-            # Change first layer to take grayscale image
-            # if args.img_channel == 1:
-            #     # feature_model = utils.update_backbone_channel(feature_model, args.img_channel)
-            #     pass
-
-            # Augmentations (from iipp paper, sec 3.3.1):
-            #   vertical_flip(p=0.3), due to some scans being flipped because the probe was too close
-            #   brightness(p=0.8)
-            #   contrast(p=0.8, max_rel_change=0.4)
-            #   rotate(p=0.5, max_angle=8deg)
-            #   crop_centrally(p=0.5, res=188x236)
-            #   hori_flip(p=0.5)
-            #   random_crop(scale=[0.25, 1], aspect_ratio=[3/4, 4/3]
-            #   resize(192x192)
-            # No gaussian blur, hue, saturation and colour droppings
-            # aug = [transforms.RandomApply([transforms.RandomVerticalFlip()], p=0.3), # Used to counter flipped scans
-            #        transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),
-            #        transforms.RandomApply([transforms.RandomRotation(degrees=8),
-            #                                # transforms.CenterCrop(size=(188, 236)), # Used in the paper, but not really applicable here
-            #                                transforms.RandomHorizontalFlip()], p=0.5),
-            #        ]
-            # aug = transforms.Compose(aug)
-
+        with torch.cuda.device(args.gpu_index):
             # Define model
             learner = DINO_LoRA(args, None, None)
 
@@ -273,12 +257,17 @@ if __name__ == "__main__":
                 # https://www.codegenes.net/blog/pytorch-bcewithlogitsloss-pos_weight/#handling-class-imbalance
                 class_counts = train_loader.dataset.map_df.groupby('label').agg(
                     img_count=('img_relative_path', 'count'))
-                pos_weights = torch.Tensor(
-                    [class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
-                    args.device)
-                criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+                # pos_weights = torch.Tensor(
+                #     [class_counts.loc[0.0, 'img_count'] / class_counts.loc[1.0, 'img_count']]).to(
+                #     args.device)
+                pos_weights = None
+                if args.use_bce:
+                    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
             else:
-                criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
+                if args.use_bce:
+                    criterion = nn.BCEWithLogitsLoss()
+                else:
+                    criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
             opt = torch.optim.AdamW(learner.parameters(), lr=args.lr, weight_decay=1e-5)
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 opt,
@@ -286,21 +275,19 @@ if __name__ == "__main__":
                 factor=0.5,
                 patience=2
             )
-            learner.train(train_loader, valid_loader, criterion, opt, wandb_log, project_name)
+            learner.train(train_loader, valid_loader, criterion, opt, scheduler=scheduler, wandb_log=wandb_log, project_name=project_name)
 
             # Get test set performance
-            test_preds, test_labels = learner.test(test_loader)
-            """
-            # Convert from logits to predictions
-            if len(labels) > 2:
-                test_probs = F.softmax(test_logits, dim=1)
-                test_preds = torch.argmax(test_probs, dim=1)
-                test_labels = torch.argmax(test_oh_labels, dim=1)
-            else:
-                test_probs = F.sigmoid(test_logits)
-                test_preds = test_probs > 0.5
-                test_labels = test_oh_labels
-            """
+            test_preds, test_labels, test_outputs = learner.test(test_loader)
+
+            # Save predictions
+            preds_df = pd.DataFrame.from_dict({'pred': test_preds.squeeze(-1), 'pred_labels': test_labels.squeeze(-1)},
+                                              orient='columns')
+            preds_df = pd.concat([test_loader.dataset.map_df.copy(), preds_df], axis=1)
+            assert len(preds_df[preds_df['pred_labels'] == preds_df['label']]) == len(preds_df)
+            preds_df = preds_df.drop(columns=['pred_labels'])
+            preds_path = f'preds_{args.dataset_name}_{int(args.ratio_sup * 100)}p{cv_split_str}.csv'
+            preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
 
             # Calculate metrics
             print(f"Test set results using {args.arch} backbone:")
@@ -316,7 +303,29 @@ if __name__ == "__main__":
             plt.ylabel('True label')
             plt.xticks(rotation=45, ha='right')
             plt.tight_layout()
-            cm_path = f"confusion_matrix_{args.dataset_name}.png"
+            cm_path = f"confusion_matrix_{args.dataset_name}{cv_split_str}.png"
             plt.savefig(args.save_folder.joinpath(cm_path))
             plt.show()
+            plt.close()
+
+            # Plot ROC curve if 2 classes
+            if len(args.labels_dict) == 2 and args.use_bce:
+                fpr, tpr, thresholds = roc_curve(test_labels, test_outputs)
+                roc_auc = auc(fpr, tpr)
+                # Plot the ROC curve
+                plt.figure()
+                plt.plot(fpr, tpr, label='ROC curve (area = %0.2f)' % roc_auc)
+                plt.plot([0, 1], [0, 1], 'k--', label='No Skill')
+                plt.xlim([0.0, 1.0])
+                plt.ylim([0.0, 1.05])
+                plt.xlabel('False Positive Rate')
+                plt.ylabel('True Positive Rate')
+                plt.title('ROC Curve')
+                plt.legend()
+                roc_path = cm_path = f"roc_{args.dataset_name}{cv_split_str}.png"
+                plt.savefig(args.save_folder.joinpath(roc_path))
+                plt.show()
+                plt.close()
+
+            del(learner)
 

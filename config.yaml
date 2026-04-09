@@ -75,6 +75,7 @@ DINO:
   dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
   dataset_path_linux: /data/Boudreault
   dataset_path_hpc: /usertemp/mts/cab8351
+  use_bce: True
   img_channel: 1
   sample_within_image: -1
   img_reshape: 256 # 480, 224 for ViT

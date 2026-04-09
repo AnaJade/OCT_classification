@@ -33,6 +33,7 @@ class DINO_LoRA(torch.nn.Module):
         self.ch_in = args.img_channel
         self.save_folder = args.save_folder
         self.dino_model = None
+        self.sigmoid = nn.Sigmoid()
 
         # Define classifier weights path
         if self.classifier_best_weights_path is None:
@@ -70,7 +71,6 @@ class DINO_LoRA(torch.nn.Module):
         print("Adding linear layer...")
         self.add_linear_layer()
         self.dino_model.to(args.device)
-
 
     def load_model(self):
         # Documentation: https://huggingface.co/collections/timm/timm-dinov3
@@ -127,7 +127,10 @@ class DINO_LoRA(torch.nn.Module):
 
     def add_linear_layer(self, num_classes=None):
         if num_classes is None:
-            num_classes = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
+            if self.args.use_bce:
+                num_classes = 1 if len(self.args.labels_dict.keys()) == 2 else len(self.args.labels_dict.keys())
+            else:
+                num_classes = len(self.args.labels_dict.keys())
         if 'ConvNeXt' in self.arch:
             dim_mlp = self.dino_model.model.head.in_features
             self.dino_model.model.head.fc = nn.Linear(dim_mlp, num_classes)
@@ -162,7 +165,7 @@ class DINO_LoRA(torch.nn.Module):
                            model_weights.items()}
         self.dino_model.load_state_dict(updated_weights, strict=False)
 
-    def train(self, train_loader, valid_loader, criterion, opt, wandb_log=False, project_name=None):
+    def train(self, train_loader, valid_loader, criterion, opt, scheduler=None, wandb_log=False, project_name=None):
         if wandb_log:
             utils.wandb_init(project_name, hyperparams=vars(self.args))
         best_epoch = 0
@@ -181,12 +184,11 @@ class DINO_LoRA(torch.nn.Module):
             for images, labels in tqdm(train_loader, desc='Training'):
                 images = images.to(self.args.device)
                 labels = labels.to(self.args.device)
-                if labels.shape[-1] > 1:
+                if labels.shape[-1] > 1 or self.args.use_bce:
                     # One-hot → class index
-                    labels = torch.argmax(labels, dim=1)
-                else:
-                    # labels = labels.unsqueeze(1)
-                    pass
+                    labels = torch.argmax(labels, dim=1)  # shape [b,]
+                    if self.args.use_bce:
+                        labels = labels.unsqueeze(1).to(torch.float16)
                 opt.zero_grad()
                 outputs = self.dino_model(images)
                 batch_loss = criterion(outputs, labels)
@@ -208,23 +210,28 @@ class DINO_LoRA(torch.nn.Module):
                 for images, labels in tqdm(valid_loader, desc='Validation'):
                     images = images.to(self.args.device)
                     labels = labels.to(self.args.device)
-                    if labels.shape[-1] > 1:
+                    if labels.shape[-1] > 1 or self.args.use_bce:
                         # One-hot → class index
-                        labels_idx = torch.argmax(labels, dim=1)
+                        labels_idx = torch.argmax(labels, dim=1)  # shape [b,]
+                        if self.args.use_bce:
+                            labels_idx = labels_idx.unsqueeze(1).to(torch.float16)
                     else:
                         labels_idx = labels
                     outputs = self.dino_model(images)
-                    batch_loss = criterion(outputs, labels)
+                    batch_loss = criterion(outputs, labels_idx)
                     avg_epoch_valid_loss.append(batch_loss)
-                    if labels.shape[-1] > 1:
+                    if labels.shape[-1] > 1 and not self.args.use_bce:
                         preds = torch.argmax(outputs, dim=1)
                     else:
-                        preds = (outputs > 0.5).to(torch.float16)
+                        preds = (self.sigmoid(outputs) > 0.5).to(torch.float16)
                     correct += (preds == labels_idx).sum().item()
                     total += labels.size(0)
                 avg_epoch_valid_loss = float(torch.mean(torch.stack(avg_epoch_valid_loss)).cpu().detach().numpy())
                 print(f"Average epoch valid loss: {avg_epoch_valid_loss}")
                 print(f"Epoch valid accuracy: {correct / total}")
+
+            if scheduler is not None:
+                scheduler.step(avg_epoch_valid_loss)
 
             if avg_epoch_valid_loss < best_valid_loss:
                 print(f'New best loss achieved @ epoch {epoch}: {avg_epoch_valid_loss}')
@@ -251,40 +258,34 @@ class DINO_LoRA(torch.nn.Module):
             self.dino_model.model.head.load_state_dict(
                 torch.load(self.classifier_best_weights_path, map_location=self.device, weights_only=True))
             self.load_lora_weights()
-            """
-            # Load original state dict
-            model_weights = self.dino_model.state_dict()
-            # Overwrite with saved weights
-            lora_weights = torch.load(self.lora_best_weights_path, map_location=self.device, weights_only=True)
-            # Double check weights
-            lora_layers = list(lora_weights.keys())
-            # print([model_weights[l].equal(lora_weights[l]) for l in lora_layers])
-            # Load into model
-            updated_weights = {l:w if w not in list(lora_weights.keys()) else lora_layers[l] for l, w in model_weights.items()}
-            self.dino_model.load_state_dict(updated_weights, strict=False)
-            """
         else:
             # Load classifier weights
             self.dino_model.head.load_state_dict(
                 torch.load(self.classifier_best_weights_path, map_location=self.device, weights_only=True))
         preds_all = []
         labels_all = []
+        outputs_all = []
         self.dino_model.eval()
         print(f'Getting test set predictions...')
         with torch.no_grad():
             for images, labels in tqdm(test_loader, desc='Testing'):
                 images = images.to(self.args.device)
                 outputs = self.dino_model(images)
-                if labels.shape[-1] > 1:
+                if labels.shape[-1] > 1 and not self.args.use_bce:
                     # One-hot → class index
                     preds = torch.argmax(outputs, dim=1)
                     labels = torch.argmax(labels, dim=1)
                 else:
-                    preds = (outputs > 0.5).to(torch.float16)
-                    labels = labels
+                    preds = (self.sigmoid(outputs) > 0.5).to(torch.float16)
+                    if self.args.use_bce:
+                        labels = torch.argmax(labels, dim=1)
+                    else:
+                        labels = labels
+                outputs_all.append(outputs)
                 preds_all.append(preds)
                 labels_all.append(labels)
+        outputs_all = torch.concat(outputs_all, dim=0).detach().to('cpu')
         preds_all = torch.concat(preds_all, dim=0).detach().to('cpu')
         labels_all = torch.concat(labels_all, dim=0).detach().to('cpu')
-        return preds_all, labels_all
+        return preds_all, labels_all, outputs_all
 
