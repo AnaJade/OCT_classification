@@ -60,8 +60,8 @@ python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classific
 python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.15 --dataset_name oct --weight_init default
 python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.20 --dataset_name oct --weight_init default
 # Run train on 100% of the clinical data starting random weights
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --dataset_name oct_clinical --weight_init random
+python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 1 --dataset_name oct_clinical --weight_init random
 # Run train on 100% of the clinical data starting imagenet weights
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --dataset_name oct_clinical --weight_init default
+python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 1 --dataset_name oct_clinical --weight_init default
 
 #

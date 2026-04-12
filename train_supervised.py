@@ -67,7 +67,7 @@ parser.add_argument('--dataset_name',
                     help='Name of the dataset to use (either oct or oct_clinical)',
                     type=str)
 parser.add_argument('--weight_init',
-                    help='Initial model weights (either Random or DEFAULT)',
+                    help='Initial model weights (either random or default)',
                     type=str)
 
 
@@ -219,6 +219,7 @@ def main():
     if not args.save_folder.is_dir():
         args.save_folder.mkdir(parents=True)
     print(f"Saving weights to: {args.save_folder}")
+    weight_init_str = '' if args.weight_init is None else f'_{args.weight_init.lower()}'
 
     # Set all random seeds
     print("Setting random seed...")
@@ -290,8 +291,11 @@ def main():
         # Update model weights name if sequential split
         if args.sequential_split:
             model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
-                f"{model.finetune_best_weights_path.stem}_seqSplit{cv_split_str}.pt")
+                f"{model.finetune_best_weights_path.stem}_seqSplit{weight_init_str}{cv_split_str}.pt")
 
+        if args.weight_init is not None:
+            model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
+                f"{model.finetune_best_weights_path.stem}{weight_init_str}.pt")
         if len(cv_splits) > 1:
             model.finetune_best_weights_path = model.finetune_best_weights_path.parent.joinpath(
                 f"{model.finetune_best_weights_path.stem}{cv_split_str}.pt")
@@ -373,11 +377,13 @@ def main():
         preds_df = pd.concat([test_loader.dataset.map_df.copy(), preds_df], axis=1)
         assert len(preds_df[preds_df['pred_labels'] == preds_df['label']]) == len(preds_df)
         preds_df = preds_df.drop(columns=['pred_labels'])
-        preds_path = f'preds_{args.dataset_name}_{int(args.ratio_sup*100)}p{cv_split_str}.csv'
+        preds_path = f'preds_{args.dataset_name}_{int(args.ratio_sup*100)}p{weight_init_str}{cv_split_str}.csv'
+        # TODO: check if path already exists. If so, add new col
         preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
 
         # Calculate metrics
-        print(f"Test set results using {args.arch} backbone \n(supervised, with {args.ratio_sup * 100}% of {args.dataset_name}):")
+        metrics_init_weight_str = '' if args.weights_init is None else f' starting from  {args.weights_init} weights'
+        print(f"Test set results using {args.arch} backbone{metrics_init_weight_str} \n(supervised, with {args.ratio_sup * 100}% of {args.dataset_name}):")
         report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
         print(report)
 
@@ -390,9 +396,9 @@ def main():
         plt.ylabel('True label')
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
-        cm_path = f"confusion_matrix_{args.dataset_name}{cv_split_str}.png"
+        cm_path = f"confusion_matrix_{args.dataset_name}{weight_init_str}{cv_split_str}.png"
         if args.sequential_split:
-            cm_path = f"confusion_matrix_{args.dataset_name}_seqSplit{cv_split_str}.png"
+            cm_path = f"confusion_matrix_{args.dataset_name}_seqSplit{weight_init_str}{cv_split_str}.png"
         if lbls_to_keep is not None:
             cm_path = f"confusion_matrix_{args.dataset_name}_{'_'.join(lbls_to_keep)}{cv_split_str}.png"
             if args.sequential_split:
@@ -416,7 +422,7 @@ def main():
             plt.ylabel('True Positive Rate')
             plt.title('ROC Curve')
             plt.legend()
-            roc_path = cm_path = f"roc_{args.dataset_name}{cv_split_str}.png"
+            roc_path = cm_path = f"roc_{args.dataset_name}{weight_init_str}{cv_split_str}.png"
             plt.savefig(args.save_folder.joinpath(roc_path))
             plt.show()
             plt.close()
