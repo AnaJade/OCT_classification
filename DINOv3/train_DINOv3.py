@@ -36,6 +36,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--config_path',
                     help='Path to the config file',
                     type=str)
+parser.add_argument('--ratio_sup',
+                    help='Ratio of the dataset used for supervised training (between 0.05 and 0.2)',
+                    type=float,)
+parser.add_argument('--dataset_name',
+                    help='Name of the dataset to use (either oct or oct_clinical)',
+                    type=str)
 
 # Img size and moco_dim (nb of classes) values based on the dataset
 img_size_dict = {'stl10': 96,
@@ -83,7 +89,7 @@ if __name__ == "__main__":
     overwrite_labels_path = pathlib.Path(configs['data']['overwrite_labels'])
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
-    args.dataset_name = configs['DINO']['dataset_name']
+    args.dataset_name = configs['finetune']['dataset_name'] if args.dataset_name is None else args.dataset_name
     args.use_bce = configs['DINO']['use_bce'] if args.dataset_name == 'oct_clinical' else False
     if 'oct' in args.dataset_name:
         mean[args.dataset_name] = 3 * [configs['data']['img_mean'] / 255]
@@ -133,7 +139,7 @@ if __name__ == "__main__":
         args.img_size = args.img_reshape
     else:
         args.img_size = 512  # BYOL requires square images, so all images will be reshaped to 512x512
-    args.ratio_sup = configs['DINO']['test_ratio_sup']
+    args.ratio_sup = configs['finetune']['ratio_sup'] if args.ratio_sup is None else args.ratio_sup
     args.ascan_per_group = ascan_per_group
     if (args.dataset_name == 'oct') and (overwrite_labels_path is not None):
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()

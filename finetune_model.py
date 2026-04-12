@@ -63,6 +63,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--config_path',
                     help='Path to the config file',
                     type=str)
+parser.add_argument('--ratio_sup',
+                    help='Ratio of the dataset used for supervised training (between 0.05 and 0.2)',
+                    type=float,)
+parser.add_argument('--dataset_name',
+                    help='Name of the dataset to use (either oct or oct_clinical)',
+                    type=str)
 
 class SupervisedModel(object):
     def __init__(self, args, ckp_file):
@@ -244,7 +250,7 @@ def main():
     overwrite_labels_path = pathlib.Path(configs['data']['overwrite_labels'])
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
-    args.dataset_name = configs['finetune']['dataset_name']
+    args.dataset_name = configs['finetune']['dataset_name'] if args.dataset_name is None else args.dataset_name
     if 'oct' in args.dataset_name:
         mean[args.dataset_name] = 3 * [configs['data']['img_mean'] / 255]
         std[args.dataset_name] = 3 * [configs['data']['img_std'] / 255]
@@ -288,7 +294,7 @@ def main():
     else:
         args.img_size = 512  # BYOL requires square images, so all images will be reshaped to 512x512
     args.use_iipp = configs['finetune']['use_iipp']
-    args.ratio_sup = configs['finetune']['ratio_sup']
+    args.ratio_sup = configs['finetune']['ratio_sup'] if args.ratio_sup is None else args.ratio_sup
     args.ascan_per_group = ascan_per_group
     if overwrite_labels_path is not None:
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
