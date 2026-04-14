@@ -382,7 +382,7 @@ def main():
         preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
 
         # Calculate metrics
-        metrics_init_weight_str = '' if args.weights_init is None else f' starting from  {args.weights_init} weights'
+        metrics_init_weight_str = '' if args.weight_init is None else f' starting from  {args.weight_init} weights'
         print(f"Test set results using {args.arch} backbone{metrics_init_weight_str} \n(supervised, with {args.ratio_sup * 100}% of {args.dataset_name}):")
         report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
         print(report)
