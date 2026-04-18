@@ -251,6 +251,7 @@ def main():
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
     args.dataset_name = configs['finetune']['dataset_name'] if args.dataset_name is None else args.dataset_name
+    args.use_bce = configs['finetune']['use_bce'] if args.dataset_name == 'oct_clinical' else False
     if 'oct' in args.dataset_name:
         mean[args.dataset_name] = 3 * [configs['data']['img_mean'] / 255]
         std[args.dataset_name] = 3 * [configs['data']['img_std'] / 255]
@@ -353,7 +354,7 @@ def main():
     # Create train and test sets
     for i, cv_split in enumerate(cv_splits):
         if len(cv_splits) == 1:
-            cv_split_str = f'_split{i}'
+            cv_split_str = f''
         else:
             print("================================")
             print(f"Split {i}")
