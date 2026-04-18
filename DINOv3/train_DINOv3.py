@@ -89,7 +89,7 @@ if __name__ == "__main__":
     overwrite_labels_path = pathlib.Path(configs['data']['overwrite_labels'])
     pre_processing = Dict(configs['data']['pre_processing'])
     use_mini_dataset = configs['data']['use_mini_dataset']
-    args.dataset_name = configs['finetune']['dataset_name'] if args.dataset_name is None else args.dataset_name
+    args.dataset_name = configs['DINO']['dataset_name'] if args.dataset_name is None else args.dataset_name
     args.use_bce = configs['DINO']['use_bce'] if args.dataset_name == 'oct_clinical' else False
     if 'oct' in args.dataset_name:
         mean[args.dataset_name] = 3 * [configs['data']['img_mean'] / 255]
@@ -139,7 +139,7 @@ if __name__ == "__main__":
         args.img_size = args.img_reshape
     else:
         args.img_size = 512  # BYOL requires square images, so all images will be reshaped to 512x512
-    args.ratio_sup = configs['finetune']['ratio_sup'] if args.ratio_sup is None else args.ratio_sup
+    args.ratio_sup = configs['DINO']['ratio_sup'] if args.ratio_sup is None else args.ratio_sup
     args.ascan_per_group = ascan_per_group
     if (args.dataset_name == 'oct') and (overwrite_labels_path is not None):
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
@@ -256,6 +256,12 @@ if __name__ == "__main__":
         with torch.cuda.device(args.gpu_index):
             # Define model
             learner = DINO_LoRA(args, None, None)
+
+            if len(cv_splits) > 1:
+                learner.classifier_best_weights_path = learner.classifier_best_weights_path.parent.joinpath(
+                    f"{learner.classifier_best_weights_path.stem}{cv_split_str}.pt")
+                learner.lora_best_weights_path = learner.lora_best_weights_path.parent.joinpath(
+                    f"{learner.lora_best_weights_path.stem}{cv_split_str}.pt")
 
             # Train linear layer and LoRA
             if args.dataset_name == 'oct_clinical':
