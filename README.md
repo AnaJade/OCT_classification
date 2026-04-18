@@ -18,8 +18,6 @@ Also install the following packages:
 * wandb: `pip install wandb`
 * addict: `pip install addict`
 * lmdb: `pip install lmdb` (for SPICE - double check if still needed)
-* tensorboard: `pip install tensorboard` (for SPICE - double check if still needed)
-  * Modify protobuf version as needed: `pip install protobuf==3.20.3 --upgrade` ([Source](https://stackoverflow.com/a/75844470))
 * BYOL model: `pip install byol-pytorch`
 * Parameter-Efficient Fine-Tuning: `pip install peft`
 * nvidia-ml-py (gpu debugging): `pip install nvidia-ml-py`
