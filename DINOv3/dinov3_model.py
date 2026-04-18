@@ -97,7 +97,7 @@ class DINO_LoRA(torch.nn.Module):
             rank = max([l.groups for l in dino_conv_modules.values()])
             alpha = rank
         elif 'Eva' in self.arch:
-            target_modules = ['qkv']
+            target_modules = ['qkv', 'proj', 'fc1', 'fc2']
             rank = 8
             alpha = 16
         else:
