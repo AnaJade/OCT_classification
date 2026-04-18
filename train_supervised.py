@@ -145,7 +145,7 @@ def main():
         num_cluster_dict[args.dataset_name] = len(labels)
         # Update pre processing
         pre_processing['no_noise'] = False  # M-Scans have already been cropped to remove noise
-        pre_processing['ascan_sampling'] = 1
+        # pre_processing['ascan_sampling'] = 1
     else:
         folder_name = args.dataset_name
     args.data = pathlib.Path(dataset_path).joinpath(folder_name)
@@ -422,7 +422,7 @@ def main():
             plt.ylabel('True Positive Rate')
             plt.title('ROC Curve')
             plt.legend()
-            roc_path = cm_path = f"roc_{args.dataset_name}{weight_init_str}{cv_split_str}.png"
+            roc_path = f"roc_{args.dataset_name}{weight_init_str}{cv_split_str}.png"
             plt.savefig(args.save_folder.joinpath(roc_path))
             plt.show()
             plt.close()

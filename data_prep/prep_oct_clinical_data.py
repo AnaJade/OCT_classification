@@ -290,7 +290,7 @@ if __name__ == '__main__':
         labels = merged_labels['Label'].unique().tolist()
         # Update settings
         pre_processing['no_noise'] = False  # M-Scans have already been cropped to remove noise
-        pre_processing['ascan_sampling'] = 1
+        # pre_processing['ascan_sampling'] = 1
         # Set target path
         img_root_path = target_path.joinpath(build_image_root(ascan_per_group, pre_processing))
         if jpg_files_info_path.exists():

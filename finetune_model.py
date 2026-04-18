@@ -268,7 +268,7 @@ def main():
         num_cluster_dict[args.dataset_name] = len(labels)
         # Update pre processing
         pre_processing['no_noise'] = False  # M-Scans have already been cropped to remove noise
-        pre_processing['ascan_sampling'] = 1
+        # pre_processing['ascan_sampling'] = 1
     else:
         folder_name = args.dataset_name
     args.data = pathlib.Path(dataset_path).joinpath(folder_name)
