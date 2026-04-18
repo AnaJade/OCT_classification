@@ -37,8 +37,9 @@ class DINO_LoRA(torch.nn.Module):
 
         # Define classifier weights path
         if self.classifier_best_weights_path is None:
+            no_lora_str = '' if self.use_lora else '_noLoRA'
             self.classifier_best_weights_path = self.args.save_folder.joinpath(
-                f'{self.dataset_name}_classifier_best_loss.pt')
+                f'{self.dataset_name}_classifier{no_lora_str}_best_loss.pt')
 
         # Define lora weights path
         if self.lora_best_weights_path is None:

@@ -298,7 +298,8 @@ if __name__ == "__main__":
             preds_df = pd.concat([test_loader.dataset.map_df.copy(), preds_df], axis=1)
             assert len(preds_df[preds_df['pred_labels'] == preds_df['label']]) == len(preds_df)
             preds_df = preds_df.drop(columns=['pred_labels'])
-            preds_path = f'preds_{args.dataset_name}_{int(args.ratio_sup * 100)}p{cv_split_str}.csv'
+            no_lora_str = '' if args.use_lora else '_noLoRA'
+            preds_path = f'preds_{args.dataset_name}_{int(args.ratio_sup * 100)}p{no_lora_str}{cv_split_str}.csv'
             preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
 
             # Calculate metrics
