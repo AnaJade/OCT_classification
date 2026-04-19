@@ -397,13 +397,13 @@ def main():
         plt.ylabel('True label')
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
-        cm_path = f"confusion_matrix_{args.dataset_name}{weight_init_str}{cv_split_str}.png"
+        cm_path = f"confusion_matrix_{args.dataset_name}_{int(args.ratio_sup * 100)}{weight_init_str}{cv_split_str}.png"
         if args.sequential_split:
-            cm_path = f"confusion_matrix_{args.dataset_name}_seqSplit{weight_init_str}{cv_split_str}.png"
+            cm_path = f"confusion_matrix_{args.dataset_name}_{int(args.ratio_sup * 100)}_seqSplit{weight_init_str}{cv_split_str}.png"
         if lbls_to_keep is not None:
-            cm_path = f"confusion_matrix_{args.dataset_name}_{'_'.join(lbls_to_keep)}{cv_split_str}.png"
+            cm_path = f"confusion_matrix_{args.dataset_name}_{int(args.ratio_sup * 100)}_{'_'.join(lbls_to_keep)}{cv_split_str}.png"
             if args.sequential_split:
-                cm_path = f"confusion_matrix_{args.dataset_name}_seqSplit_{'_'.join(lbls_to_keep)}{cv_split_str}.png"
+                cm_path = f"confusion_matrix_{args.dataset_name}_{int(args.ratio_sup * 100)}_seqSplit_{'_'.join(lbls_to_keep)}{cv_split_str}.png"
 
         plt.savefig(args.save_folder.joinpath(cm_path))
         plt.show()
@@ -423,7 +423,7 @@ def main():
             plt.ylabel('True Positive Rate')
             plt.title('ROC Curve')
             plt.legend()
-            roc_path = f"roc_{args.dataset_name}{weight_init_str}{cv_split_str}.png"
+            roc_path = f"roc_{args.dataset_name}_{int(args.ratio_sup * 100)}{weight_init_str}{cv_split_str}.png"
             plt.savefig(args.save_folder.joinpath(roc_path))
             plt.show()
             plt.close()
