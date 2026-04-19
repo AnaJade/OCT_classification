@@ -373,12 +373,13 @@ def main():
         test_preds, test_labels, test_outputs = model.test(test_loader)
 
         # Save predictions
-        preds_df = pd.DataFrame.from_dict({'pred': test_preds.squeeze(-1), 'pred_labels': test_labels.squeeze(-1)}, orient='columns')
+        preds_dict = {f'prob_{i}': test_outputs[:, i].squeeze(-1) for i in range(test_outputs.shape[1])}
+        preds_dict.update({'pred': test_preds.squeeze(-1), 'pred_labels': test_labels.squeeze(-1)})
+        preds_df = pd.DataFrame.from_dict(preds_dict, orient='columns')
         preds_df = pd.concat([test_loader.dataset.map_df.copy(), preds_df], axis=1)
         assert len(preds_df[preds_df['pred_labels'] == preds_df['label']]) == len(preds_df)
         preds_df = preds_df.drop(columns=['pred_labels'])
         preds_path = f'preds_{args.dataset_name}_{int(args.ratio_sup*100)}p{weight_init_str}{cv_split_str}.csv'
-        # TODO: check if path already exists. If so, add new col
         preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
 
         # Calculate metrics

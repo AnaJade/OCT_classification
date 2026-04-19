@@ -91,7 +91,7 @@ class OCTDataset(Dataset): # Used in train_moco
         # Redo-split if necessary
         if self.overwrite_split is not None:
             map_dfs = pd.concat([pd.read_csv(pathlib.Path(p)) for p in map_df_paths.values()], axis=0)
-            map_dfs.loc[:, 'img_relative_path'] = [pathlib.Path(p) for p in map_dfs['img_relative_path']]
+            map_dfs['img_relative_path'] = [pathlib.Path(p) for p in map_dfs['img_relative_path']]
             map_dfs.loc[:, 'area'] = [p.parts[-2] for p in map_dfs['img_relative_path']]
             # map_dfs.loc[:, 'pat'] = [int(re.sub(r'[^\d]+', '', p.parts[-2])) for p in map_dfs['img_relative_path']]
             new_areas = self.overwrite_split[split]
@@ -101,7 +101,7 @@ class OCTDataset(Dataset): # Used in train_moco
         # Update relative path to image paths
         ascan_per_group = self.map_df['idx_end'].iloc[0]
         # img_subdir = pathlib.Path(f"{ascan_per_group}mscans")
-        self.map_df.loc[:, 'img_relative_path'] = [pathlib.Path(p) for p in self.map_df.loc[:,'img_relative_path']]
+        self.map_df['img_relative_path'] = [pathlib.Path(p) for p in self.map_df.loc[:,'img_relative_path']]
 
         # Restructure mapping df
         self.map_df = self.map_df.rename(columns={'label': 'label_str'})
@@ -157,13 +157,13 @@ class OCTDataset(Dataset): # Used in train_moco
         if  (self.ratio_sup > 0) and (self.ratio_sup < 1):
             self.map_df.loc[:, 'subset_id'] = self.map_df.groupby(['area_id', 'trajectory']).cumcount()
             self.map_df.loc[:, 'subset'] = ''
-            mod = int(np.ceil(1/self.ratio_sup))
+            mod = int(np.round(1/self.ratio_sup))
             sup = int(mod-1)
             # Reserve 10% of data for supervised training
             self.map_df.loc[self.map_df['subset_id'] % mod == sup, 'subset'] = f'{split}_supervised'
             self.map_df.loc[self.map_df['subset'] != f'{split}_supervised', 'subset'] = split
             self.map_df = self.map_df.drop(columns=['subset_id'])
-            print(f"{round((len(self.map_df[self.map_df['subset'].str.contains('supervised')])/len(self.map_df[~self.map_df['subset'].str.contains('supervised')]))*100, 2)}% ({len(self.map_df[self.map_df['subset'].str.contains('supervised')])}/{len(self.map_df[~self.map_df['subset'].str.contains('supervised')])}) of images in the {split} set remain for supervised learning.")
+            print(f"{round((len(self.map_df[self.map_df['subset'].str.contains('supervised')])/len(self.map_df))*100, 2)}% ({len(self.map_df[self.map_df['subset'].str.contains('supervised')])}/{len(self.map_df)}) of images in the {split} set remain for supervised learning.")
         elif supervised and self.ratio_sup == 1:
             self.map_df.loc[:, 'subset'] = f'{split}_supervised'
 
