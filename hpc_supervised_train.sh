@@ -50,19 +50,21 @@ mkdir -p $HF_HOME $PIP_CACHE_DIR $TORCH_HOME
 
 #--- Run Training ---
 # python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml
-# Run train from 5 to 20% of the lab data starting from random weights
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.05 --dataset_name oct --weight_init random
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.10 --dataset_name oct --weight_init random
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.15 --dataset_name oct --weight_init random
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.20 --dataset_name oct --weight_init random
-# Run train from 5 to 20% of the lab data starting from imagenet weights
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.05 --dataset_name oct --weight_init default
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.10 --dataset_name oct --weight_init default
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.15 --dataset_name oct --weight_init default
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.20 --dataset_name oct --weight_init default
-# Run train on 100% of the clinical data starting random weights
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 1 --dataset_name oct_clinical --weight_init random
-# Run train on 100% of the clinical data starting imagenet weights
-python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 1 --dataset_name oct_clinical --weight_init default
-
+for arch in resnet18 mobilenetv3 pvtv2b0
+  do
+  # Run train from 5 to 20% of the lab data starting from random weights
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.05 --dataset_name oct --weight_init random --arch $arch
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.10 --dataset_name oct --weight_init random --arch $arch
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.15 --dataset_name oct --weight_init random --arch $arch
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.20 --dataset_name oct --weight_init random --arch $arch
+  # Run train from 5 to 20% of the lab data starting from imagenet weights
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.05 --dataset_name oct --weight_init default --arch $arch
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.10 --dataset_name oct --weight_init default --arch $arch
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.15 --dataset_name oct --weight_init default --arch $arch
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.20 --dataset_name oct --weight_init default --arch $arch
+  # Run train on 100% of the clinical data starting random weights
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 1 --dataset_name oct_clinical --weight_init random --arch $arch
+  # Run train on 100% of the clinical data starting imagenet weights
+  python $HOME/OCT_classification/train_supervised.py --config $HOME/OCT_classification/config.yaml --ratio_sup 1 --dataset_name oct_clinical --weight_init default --arch $arch
+done
 #

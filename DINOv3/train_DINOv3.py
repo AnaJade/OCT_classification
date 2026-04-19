@@ -42,6 +42,12 @@ parser.add_argument('--ratio_sup',
 parser.add_argument('--dataset_name',
                     help='Name of the dataset to use (either oct or oct_clinical)',
                     type=str)
+parser.add_argument('--arch',
+                    help='Name of the dataset to use (either oct or oct_clinical)',
+                    type=str)
+parser.add_argument('--use_lora',
+                    help='Name of the dataset to use (either oct or oct_clinical)',
+                    type=bool)
 
 # Img size and moco_dim (nb of classes) values based on the dataset
 img_size_dict = {'stl10': 96,
@@ -149,8 +155,8 @@ if __name__ == "__main__":
     # Training params
     args.seed = configs['training']['random_seed']
     args.dataset_sample = configs['DINO']['dataset_sample']
-    args.arch = configs['DINO']['arch']
-    args.use_lora = configs['DINO']['use_lora']
+    args.arch = configs['DINO']['arch'] if args.arch is None else args.arch
+    args.use_lora = configs['DINO']['use_lora'] if args.use_lora is None else args.use_lora
     args.workers = configs['DINO']['num_workers']
     args.epochs = configs['DINO']['max_epochs']
     args.batch_size = configs['DINO']['batch_size']
@@ -316,7 +322,7 @@ if __name__ == "__main__":
             plt.ylabel('True label')
             plt.xticks(rotation=45, ha='right')
             plt.tight_layout()
-            cm_path = f"confusion_matrix_{args.dataset_name}{cv_split_str}.png"
+            cm_path = f"confusion_matrix_{args.dataset_name}_{int(args.ratio_sup * 100)}{cv_split_str}.png"
             plt.savefig(args.save_folder.joinpath(cm_path))
             plt.show()
             plt.close()
@@ -335,7 +341,7 @@ if __name__ == "__main__":
                 plt.ylabel('True Positive Rate')
                 plt.title('ROC Curve')
                 plt.legend()
-                roc_path = cm_path = f"roc_{args.dataset_name}{cv_split_str}.png"
+                roc_path = f"roc_{args.dataset_name}_{int(args.ratio_sup * 100)}{cv_split_str}.png"
                 plt.savefig(args.save_folder.joinpath(roc_path))
                 plt.show()
                 plt.close()

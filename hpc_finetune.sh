@@ -50,11 +50,11 @@ mkdir -p $HF_HOME $PIP_CACHE_DIR $TORCH_HOME
 
 #--- Run Training ---
 # python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml
-# Run finetune from 5 to 20% of the lab data
 for approach in simclr byol
 do
   for arch in resnet18 mobilenetv3 pvtv2b0
   do
+    # Run finetune from 5 to 20% of the lab data
   python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.05 --dataset_name oct --approach $approach --arch $arch
   python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.10 --dataset_name oct --approach $approach --arch $arch
   python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.15 --dataset_name oct --approach $approach --arch $arch

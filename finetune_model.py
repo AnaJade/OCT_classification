@@ -485,7 +485,7 @@ def main():
             plt.ylabel('True Positive Rate')
             plt.title('ROC Curve')
             plt.legend()
-            roc_path = cm_path = f"roc_{args.dataset_name}_{int(args.ratio_sup * 100)}{cv_split_str}.png"
+            roc_path = f"roc_{args.dataset_name}_{int(args.ratio_sup * 100)}{cv_split_str}.png"
             plt.savefig(args.save_folder.joinpath(roc_path))
             plt.show()
             plt.close()
