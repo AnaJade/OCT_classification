@@ -54,11 +54,6 @@ python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classificat
 python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.10 --dataset_name oct
 python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.15 --dataset_name oct
 python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.20 --dataset_name oct
-# Run finetune from 5 to 20% of the lab data
-python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.05 --dataset_name oct
-python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.10 --dataset_name oct
-python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.15 --dataset_name oct
-python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 0.20 --dataset_name oct
 # Run finetune on 100% of the clinical data
 python $HOME/OCT_classification/finetune_model.py --config $HOME/OCT_classification/config.yaml --ratio_sup 1 --dataset_name oct_clinical
 

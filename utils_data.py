@@ -157,7 +157,7 @@ class OCTDataset(Dataset): # Used in train_moco
         if  (self.ratio_sup > 0) and (self.ratio_sup < 1):
             self.map_df.loc[:, 'subset_id'] = self.map_df.groupby(['area_id', 'trajectory']).cumcount()
             self.map_df.loc[:, 'subset'] = ''
-            mod = int(1/self.ratio_sup)
+            mod = int(np.ceil(1/self.ratio_sup))
             sup = int(mod-1)
             # Reserve 10% of data for supervised training
             self.map_df.loc[self.map_df['subset_id'] % mod == sup, 'subset'] = f'{split}_supervised'

@@ -1,5 +1,5 @@
 data:
-  dataset_root_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
+  dataset_root_windows: C:\Users\Ana-Jade\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data # D:\Masterarbeit\OCT_lab_data
   dataset_root_linux: /data/Boudreault/OCT_lab_data_raw
   ds_split: [0.5, 0.25, 0.25]
   labels:
@@ -26,7 +26,7 @@ training:
   random_seed: 2625233
 SimCLR:
   dataset_name: oct  # [stl10, cifar10, cifar100]
-  dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  dataset_path_windows: C:\Users\Ana-Jade\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
   dataset_path_linux: /data/Boudreault
   dataset_path_hpc: /usertemp/mts/cab8351
   img_channel: 1
@@ -52,7 +52,7 @@ SimCLR:
   patience: 20
 BYOL:
   dataset_name: oct  # [stl10, cifar10, cifar100]
-  dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  dataset_path_windows: C:\Users\Ana-Jade\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
   dataset_path_linux: /data/Boudreault
   dataset_path_hpc: /usertemp/mts/cab8351
   img_channel: 1
@@ -72,7 +72,7 @@ BYOL:
   patience: 20
 DINO:
   dataset_name: oct  # [stl10, cifar10, cifar100]
-  dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
+  dataset_path_windows: C:\Users\Ana-Jade\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit
   dataset_path_linux: /data/Boudreault
   dataset_path_hpc: /usertemp/mts/cab8351
   use_bce: True
@@ -92,7 +92,7 @@ DINO:
   patience: 10 # 20
 finetune:
   dataset_name: oct # oct_clinical  # [stl10, cifar10, cifar100]
-  dataset_path_windows: C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit # X:\Boudreault
+  dataset_path_windows: C:\Users\Ana-Jade\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit # X:\Boudreault
   dataset_path_linux: /data/Boudreault
   dataset_path_hpc: /usertemp/mts/cab8351
   use_bce: True

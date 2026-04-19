@@ -1,9 +1,12 @@
 .idea
 __pycache__/*
 SimCLR.zip
-brouillon.ipynb
-data_prep/df_split_dbg.xlsx
 *.png
+*.svg
+*.csv
+*.xlsx
+*.out
+data_prep/__pycache__
 BYOL/weights*
 BYOL/*.pth
 BYOL/__pycache__

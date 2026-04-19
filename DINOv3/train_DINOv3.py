@@ -139,7 +139,7 @@ if __name__ == "__main__":
         args.img_size = args.img_reshape
     else:
         args.img_size = 512  # BYOL requires square images, so all images will be reshaped to 512x512
-    args.ratio_sup = configs['DINO']['ratio_sup'] if args.ratio_sup is None else args.ratio_sup
+    args.ratio_sup = configs['DINO']['test_ratio_sup'] if args.ratio_sup is None else args.ratio_sup
     args.ascan_per_group = ascan_per_group
     if (args.dataset_name == 'oct') and (overwrite_labels_path is not None):
         labels = pd.read_csv(args.map_df_paths['train'])['label'].unique().tolist()
