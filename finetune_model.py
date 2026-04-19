@@ -69,6 +69,12 @@ parser.add_argument('--ratio_sup',
 parser.add_argument('--dataset_name',
                     help='Name of the dataset to use (either oct or oct_clinical)',
                     type=str)
+parser.add_argument('--approach',
+                    help='Name of the dataset to use (either oct or oct_clinical)',
+                    type=str)
+parser.add_argument('--arch',
+                    help='Name of the dataset to use (either oct or oct_clinical)',
+                    type=str)
 
 class SupervisedModel(object):
     def __init__(self, args, ckp_file):
@@ -307,8 +313,8 @@ def main():
     # Training params
     args.seed = configs['training']['random_seed']
     args.dataset_sample = configs['finetune']['dataset_sample']
-    args.approach = configs['finetune']['approach']
-    args.arch = configs['finetune']['arch']
+    args.approach = configs['finetune']['approach'] if args.approach is None else args.approach
+    args.arch = configs['finetune']['arch'] if args.arch is None else args.arch
     args.workers = configs['finetune']['num_workers']
     args.epochs = configs['finetune']['max_epochs']
     args.batch_size = configs['finetune']['batch_size']
