@@ -248,7 +248,7 @@ def create_mapping_dfs_clinical(jpg_root_path: pathlib.Path, df_split:pd.DataFra
 
         # Save to csv
         map_df_path = f"{split}{'Mini' if mini_dataset else ''}_mapping_{ascan_per_group}scans.csv"
-        print(f"Saving {split} mapping as {map_df_path}...")
+        print(f"Saving {split} mapping as {jpg_root_path.joinpath(map_df_path)}...")
         df_map_split.to_csv(jpg_root_path.joinpath(map_df_path), index=False)
 
 
@@ -285,7 +285,7 @@ if __name__ == '__main__':
     # Update labels if clinical data is used
     if 'clinical' in dataset_root.__str__():
         jpg_files_info_path = pathlib.Path('clinical_jpg_files_info.csv')
-        lbl_root_path = dataset_root.parent.joinpath('Labels')
+        lbl_root_path = dataset_root.joinpath('Labels')# dataset_root.parent.joinpath('Labels')
         merged_labels = merge_all_labels(lbl_root_path)
         labels = merged_labels['Label'].unique().tolist()
         # Update settings
@@ -299,16 +299,16 @@ if __name__ == '__main__':
             # Get jpg file info
             jpg_files_info = get_clinical_img_dataset_info(target_path, img_root_path, merged_labels)
             # Filter for corrected labels
-            traj_to_remove = ['pat01_vc_re_run1',
-                              'pat04_vc_le_run1',
-                              'pat04_vc_le_run3',
-                              'pat04_vc_re_run2',
-                              'pat06_vc_re_run1',
-                              'pat07_vc_re_run1',
-                              'pat15_vc_le_run1']
-            jpg_files_info = jpg_files_info[~jpg_files_info['trajectory'].str.contains('|'.join(f'{f}_' for f in traj_to_remove))].reset_index(drop=True).copy()
+            # traj_to_remove = ['pat01_vc_re_run1',
+            #                   'pat04_vc_le_run1',
+            #                   'pat04_vc_le_run3',
+            #                   'pat04_vc_re_run2',
+            #                   'pat06_vc_re_run1',
+            #                   'pat07_vc_re_run1',
+            #                   'pat15_vc_le_run1']
+            # jpg_files_info = jpg_files_info[~jpg_files_info['trajectory'].str.contains('|'.join(f'{f}_' for f in traj_to_remove))].reset_index(drop=True).copy()
             jpg_files_info.to_csv(jpg_files_info_path, index=False)
-
+        pat_split = None
     else:
         # target_path = pathlib.Path(r"C:\Users\anaja\OneDrive\Documents\Ecole\TUHH\Semester 6\Masterarbeit\OCT_lab_data")
         target_path = pathlib.Path(r"/data/Boudreault/OCT_lab_data")
@@ -324,7 +324,33 @@ if __name__ == '__main__':
         jpg_files_info.loc[:, 'idx_end'] = jpg_files_info.loc[:, 'idx_start'] + ascan_per_group-1
 
     # Split into train-valid-test
+    # New split
+    # Since we do not have the ground truth data, we could only use lesions that look similar in WLE.
+    # I scanned through the videos and ended up only using lesions from patient 1, 2, 8, 13, 15, 16.
+    # From the remaining patients I only used the healthy data.
+    # If available I also used the healthy OCT from the lesion patients.
+    # train_areas = ["pat16", "pat13", "pat01", "pat15", "pat04", "pat09", "pat11", "pat12", "pat14", "pat06"]
+    # valid_areas = ["pat02", "pat10"]
+    # test_areas = ["pat08", "pat07"]
+    train_areas = ["pat16", "pat13", "pat01", "pat15", "pat04", "pat09", "pat11", "pat12", "pat14", "pat06"]
+    valid_areas = ["pat02", "pat10"]
+    test_areas = ["pat08", "pat07"]
+    pat_split = {'train': train_areas,
+                 'valid': valid_areas,
+                 'test': test_areas}
+    # Remove Lesion data not from selected patients
+    lbl_per_pat = jpg_files_info.groupby('folder').agg({'label': lambda x: ', '.join(set(x))})
+    pat_lesions = [f"pat{i:02d}" for i in [1, 2, 8, 13, 15, 16]]
+    # jpg_files_info_rm = jpg_files_info[((jpg_files_info['label'] == 'Lesion') & ~(jpg_files_info['folder'].isin(pat_lesions)))].copy()
+    jpg_files_info = jpg_files_info[~((jpg_files_info['label'] == 'Lesion') & ~(jpg_files_info['folder'].isin(pat_lesions)))].copy()
+
     df_split = split_clinical_train_valid_test(ds_split, jpg_files_info, labels)
+
+    # Overwrite split
+    print(f"Overwrite split with pre-defined split")
+    df_split['split'] == ''
+    for s, ps in pat_split.items():
+        df_split.loc[df_split['pat'].isin([int(re.sub(r'[^\d]+', '',p)) for p in ps]), 'split'] = s
 
     # Save mapping dfs
     create_mapping_dfs_clinical(img_root_path, df_split, jpg_files_info, ascan_per_group, use_mini_dataset)
