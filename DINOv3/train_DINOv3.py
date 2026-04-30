@@ -236,6 +236,7 @@ if __name__ == "__main__":
         test_aug = [
             transforms.RandomEqualize(p=0.0),
         ]
+        """
         if args.dataset_name == 'oct_clinical':
             train_aug = train_aug + [
                 v2.RandomApply([v2.ColorJitter(brightness=0.25, contrast=0.25)], p=0.5),
@@ -249,6 +250,7 @@ if __name__ == "__main__":
                 # v2.RandomApply([v2.GaussianNoise(mean=0, sigma=0.1, clip=True)], p=0.5), # https://doi.org/10.1002/eng2.70110
                 v2.RandomAutocontrast(p=0.5),
             ]
+            """
         train_loader, valid_loader, test_loader = get_supervised_oct_data_loaders(args.data, args, args.batch_size,
                                                                                   train_aug=train_aug,
                                                                                   test_aug=test_aug,
@@ -281,6 +283,8 @@ if __name__ == "__main__":
                 pos_weights = None
                 if args.use_bce:
                     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
+                else:
+                    criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
             else:
                 if args.use_bce:
                     criterion = nn.BCEWithLogitsLoss()
