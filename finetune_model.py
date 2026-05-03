@@ -2,6 +2,7 @@ import argparse
 import pathlib
 import random
 import sys
+import time
 from sys import platform
 import socket
 from argparse import Namespace
@@ -210,9 +211,12 @@ class SupervisedModel(object):
         self.model.eval()
         print(f'Getting test set predictions...')
         with torch.no_grad():
+            infer_time = []
             for images, labels in tqdm(test_loader, desc='Testing'):
                 images = images.to(self.args.device)
+                start_time = time.time()
                 outputs = self.model(images)
+                infer_time.append(time.time() - start_time)
                 if labels.shape[-1] > 1 and not self.args.use_bce:
                     # One-hot → class index
                     preds = torch.argmax(outputs, dim=1)
@@ -229,6 +233,11 @@ class SupervisedModel(object):
         outputs_all = torch.concat(outputs_all, dim=0).detach().to('cpu')
         preds_all = torch.concat(preds_all, dim=0).detach().to('cpu')
         labels_all = torch.concat(labels_all, dim=0).detach().to('cpu')
+        # Print inference time estats
+        infer_time = np.array(infer_time)
+        print(f"Mean inference time: {np.mean(infer_time)*1e3:.2f}ms")
+        print(f"Median inference time: {np.median(infer_time)*1e3:.2f}ms")
+        print(f"min: {np.min(infer_time)*1e3:.2f}ms, max: {np.max(infer_time)*1e3:.2f}ms")
         return preds_all, labels_all, outputs_all
 
 

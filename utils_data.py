@@ -168,7 +168,7 @@ class OCTDataset(Dataset): # Used in train_moco
             self.map_df.loc[:, 'subset'] = f'{split}_supervised'
 
         if 'subset' in self.map_df.columns:
-            if supervised: # subset is not None:
+            if supervised and (self.split != 'test'): # Keep all images for test set
                 self.map_df = self.map_df[self.map_df['subset'] == f'{split}_supervised'].reset_index(drop=True).copy()
             else:
                 self.map_df = self.map_df[self.map_df['subset'].str.contains(split)].reset_index(drop=True).copy()
