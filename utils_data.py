@@ -6,6 +6,7 @@ import platform
 import socket
 from sys import platform
 from random import randint
+import itertools
 import re
 import h5py
 
@@ -92,11 +93,24 @@ class OCTDataset(Dataset): # Used in train_moco
         if self.overwrite_split is not None:
             map_dfs = pd.concat([pd.read_csv(pathlib.Path(p)) for p in map_df_paths.values()], axis=0)
             map_dfs['img_relative_path'] = [pathlib.Path(p) for p in map_dfs['img_relative_path']]
-            map_dfs.loc[:, 'area'] = [p.parts[-2] for p in map_dfs['img_relative_path']]
-            # map_dfs.loc[:, 'pat'] = [int(re.sub(r'[^\d]+', '', p.parts[-2])) for p in map_dfs['img_relative_path']]
-            new_areas = self.overwrite_split[split]
-            self.map_df = map_dfs[map_dfs['area'].isin(new_areas)].copy()
-            self.map_df.loc[:, 'subset'] = split
+            map_dfs.loc[:, 'area'] = [p.parts[-2] for p in map_dfs['img_relative_path']]            # Redo split for clinical data
+            if 'Healthy' in self.label_dict.values():
+                # map_dfs.loc[:, 'pat'] = [int(re.sub(r'[^\d]+', '', p.parts[-2])) for p in map_dfs['img_relative_path']]
+                new_areas = self.overwrite_split[split]
+                self.map_df = map_dfs[map_dfs['area'].isin(new_areas)].copy()
+                self.map_df.loc[:, 'subset'] = split
+            # Redo split for lab data
+            else:
+                if supervised:
+                    # Filter to keep only labels not in overwrite_split
+                    # Keep only desired split
+                    self.map_df = map_dfs[~(map_dfs['label'].isin(overwrite_split)) & (map_dfs['subset'].str.contains(split))].copy()
+                else:
+                    # Filter to keep only labels within overwrite_split
+                    # Keep imgs over all splits
+                    self.map_df = map_dfs[(map_dfs['label'].isin(overwrite_split))].copy()
+                    # Overwrite split
+                    self.map_df['subset'] = split
 
         # Update relative path to image paths
         ascan_per_group = self.map_df['idx_end'].iloc[0]
@@ -490,6 +504,30 @@ def get_cross_valid_splits(args:argparse.Namespace, k: int) -> list:
         overall_i = overall_i + 1
 
     return splits
+
+
+def get_lab_data_splits(args:argparse.Namespace) -> list:
+    subsets = ['train', 'valid', 'test']
+
+    # Load mapping dfs
+    map_dfs = pd.concat([pd.read_csv(pathlib.Path(p)) for p in args.map_df_paths.values()], axis=0)
+    map_dfs['img_relative_path'] = [pathlib.Path(p) for p in map_dfs['img_relative_path']]
+    map_dfs.loc[:, 'area'] = [p.parts[-2] for p in map_dfs['img_relative_path']]
+    # map_dfs.loc[:, 'pat'] = [int(re.sub(r'[^\d]+', '', p.parts[-2])) for p in map_dfs['img_relative_path']]
+
+    # For info purposes: Get img count per lbl per subset
+    # map_dfs['gen_subset'] = ''
+    # map_dfs.loc[map_dfs['subset'].str.contains('train'), 'gen_subset'] = 'train'
+    # map_dfs.loc[map_dfs['subset'].str.contains('valid'), 'gen_subset'] = 'valid'
+    # map_dfs.loc[map_dfs['subset'].str.contains('test'), 'gen_subset'] = 'test'
+    # map_dfs.groupby(['label', 'gen_subset']).agg(img_count=('img_relative_path', 'count'))
+
+    # Get list of all current labels
+    lbl_list = map_dfs['label'].sort_values().unique()
+
+    # Find all combinations of 3 within the labels
+    lbl_combi = list(itertools.combinations(lbl_list, 3))
+    return lbl_combi
 
 
 def get_stl10_data_loaders(root_path, batch_size=128, shuffle=False, download=False):

@@ -28,7 +28,7 @@ from feature_model import get_backbone
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import OCTDataset, build_image_root, RandomWrapAround, NormTransform
+from utils_data import OCTDataset, build_image_root, RandomWrapAround, NormTransform, get_lab_data_splits
 
 
 # Set up the argument parser
@@ -175,141 +175,172 @@ if __name__ == "__main__":
         args.device = torch.device('cpu')
         args.gpu_index = -1
 
-    # Dataloader
-    if args.dataset_name == 'oct':
-        img_transforms = [transforms.RandomEqualize(p=0.5),
-                          v2.ToTensor(),  # scales pixel values to [0, 1]
-                          v2.Resize((args.img_reshape, args.img_reshape), interpolation=InterpolationMode.BILINEAR),
-                          NormTransform()]
-        if (args.sample_within_image <= 0) and (args.img_reshape <= 480):
-            img_transforms.insert(1, transforms.CenterCrop(480))
-        if args.img_channel == 1:
-            img_transforms.append(transforms.Grayscale())
-        img_transforms = transforms.Compose(img_transforms)
-        train_dataset = OCTDataset(dataset_root, 'train',
-                                   args.map_df_paths, args.labels_dict,
-                                   ch_in=args.img_channel,
-                                   sample_within_image=args.sample_within_image,
-                                   use_iipp=args.use_iipp,
-                                   num_same_area=-1,
-                                   transforms=img_transforms,
-                                   pre_sample=args.dataset_sample)
-    elif args.dataset_name == 'stl10':
-        args.img_size = img_size_dict[args.dataset_name]
-        img_transforms = transforms.Compose([transforms.ToTensor(),
-                                             transforms.Normalize(mean=mean[args.dataset_name],
-                                                                  std=std[args.dataset_name])])
-        train_dataset = STL10(dataset_root, split="train",
-                              transform=img_transforms,
-                              download=True)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
-                              num_workers=args.workers, drop_last=False, shuffle=True)
+    if args.dataset_name == 'oct_clinical':
+        # Generate cross-validation split
+        # cv_splits = get_cross_valid_splits(args, k=3)
+        cv_splits = [None]
+    elif args.dataset_name == 'oct':
+        cv_splits = get_lab_data_splits(args)
+        lbl_abbs = {'chicken_heart_muscle': 'chm',
+                    'lamb_heart_fat': 'lhf',
+                    'lamb_heart_muscle': 'lhm',
+                    'lamb_liver': 'll',
+                    'lamb_testicle': 'lt'}
+    else:
+        cv_splits = [None]
 
-    with torch.cuda.device(args.gpu_index):
-        feature_model, feature_layer = get_backbone(args.arch, args.use_pretrained)
+    # Loop over cv splits
+    for i, cv_split in enumerate(cv_splits):
+        if len(cv_splits) == 1:
+            cv_split_str = f''
+        else:
+            print("================================")
+            print(f"Split {i}")
+            print(cv_split)
+            cv_split_str = f'_split{i}'
+            if args.dataset_name == 'oct':
+                cv_split_str = f"_split_{'_'.join([lbl_abbs[l] for l in cv_split])}"
+                # Update args.labels_dict
+                labels = list(cv_split)
+                args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
 
-        # Change first layer to take grayscale image
-        if args.img_channel == 1:
-            feature_model = utils.update_backbone_channel(feature_model, args.img_channel)
+        # Dataloader
+        if args.dataset_name == 'oct':
+            img_transforms = [transforms.RandomEqualize(p=0.5),
+                              v2.ToTensor(),  # scales pixel values to [0, 1]
+                              v2.Resize((args.img_reshape, args.img_reshape), interpolation=InterpolationMode.BILINEAR),
+                              NormTransform()]
+            if (args.sample_within_image <= 0) and (args.img_reshape <= 480):
+                img_transforms.insert(1, transforms.CenterCrop(480))
+            if args.img_channel == 1:
+                img_transforms.append(transforms.Grayscale())
+            img_transforms = transforms.Compose(img_transforms)
+            train_dataset = OCTDataset(dataset_root, 'train',
+                                       args.map_df_paths, args.labels_dict,
+                                       ch_in=args.img_channel,
+                                       sample_within_image=args.sample_within_image,
+                                       use_iipp=args.use_iipp,
+                                       num_same_area=-1,
+                                       transforms=img_transforms,
+                                       pre_sample=args.dataset_sample,
+                                       overwrite_split=cv_split)
+        elif args.dataset_name == 'stl10':
+            args.img_size = img_size_dict[args.dataset_name]
+            img_transforms = transforms.Compose([transforms.ToTensor(),
+                                                 transforms.Normalize(mean=mean[args.dataset_name],
+                                                                      std=std[args.dataset_name])])
+            train_dataset = STL10(dataset_root, split="train",
+                                  transform=img_transforms,
+                                  download=True)
+        train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
+                                  num_workers=args.workers, drop_last=False, shuffle=True)
 
-        # Augmentations (from iipp paper, sec 3.3.1):
-        #   vertical_flip(p=0.3), due to some scans being flipped because the probe was too close
-        #   brightness(p=0.8)
-        #   contrast(p=0.8, max_rel_change=0.4)
-        #   rotate(p=0.5, max_angle=8deg)
-        #   crop_centrally(p=0.5, res=188x236)
-        #   hori_flip(p=0.5)
-        #   random_crop(scale=[0.25, 1], aspect_ratio=[3/4, 4/3]
-        #   resize(192x192)
-        # No gaussian blur, hue, saturation and colour droppings
-        # aug = [transforms.RandomApply([transforms.RandomVerticalFlip()], p=0.3), # Used to counter flipped scans
-        #        transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),
-        #        transforms.RandomApply([transforms.RandomRotation(degrees=8),
-        #                                # transforms.CenterCrop(size=(188, 236)), # Used in the paper, but not really applicable here
-        #                                transforms.RandomHorizontalFlip()], p=0.5),
-        #        ]
-        aug = [
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomVerticalFlip(p=0.5),
-            RandomWrapAround(dim=-1, p=1.0),
-            RandomWrapAround(dim=-2, p=1.0)
-        ]
-        aug = transforms.Compose(aug)
+        with torch.cuda.device(args.gpu_index):
+            feature_model, feature_layer = get_backbone(args.arch, args.use_pretrained)
 
-        learner = BYOL_custom(
-            feature_model.cuda(args.gpu_index),
-            ch_in=args.img_channel,
-            use_iipp=args.use_iipp,
-            image_size=args.img_size,
-            hidden_layer=feature_layer,
-            augment_fn=aug,
-            augment_fn2=aug
-        )
+            # Change first layer to take grayscale image
+            if args.img_channel == 1:
+                feature_model = utils.update_backbone_channel(feature_model, args.img_channel)
 
-        # opt = torch.optim.Adam(learner.parameters(), lr=args.lr) # , eps=6e-5)
-        opt = torch.optim.AdamW(learner.parameters(), lr=args.lr)
-        # opt = torch.optim.SGD(learner.parameters(), lr=args.lr)
+            # Augmentations (from iipp paper, sec 3.3.1):
+            #   vertical_flip(p=0.3), due to some scans being flipped because the probe was too close
+            #   brightness(p=0.8)
+            #   contrast(p=0.8, max_rel_change=0.4)
+            #   rotate(p=0.5, max_angle=8deg)
+            #   crop_centrally(p=0.5, res=188x236)
+            #   hori_flip(p=0.5)
+            #   random_crop(scale=[0.25, 1], aspect_ratio=[3/4, 4/3]
+            #   resize(192x192)
+            # No gaussian blur, hue, saturation and colour droppings
+            # aug = [transforms.RandomApply([transforms.RandomVerticalFlip()], p=0.3), # Used to counter flipped scans
+            #        transforms.RandomApply([transforms.ColorJitter(brightness=0.2, contrast=0.2)], p=0.8),
+            #        transforms.RandomApply([transforms.RandomRotation(degrees=8),
+            #                                # transforms.CenterCrop(size=(188, 236)), # Used in the paper, but not really applicable here
+            #                                transforms.RandomHorizontalFlip()], p=0.5),
+            #        ]
+            aug = [
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomVerticalFlip(p=0.5),
+                RandomWrapAround(dim=-1, p=1.0),
+                RandomWrapAround(dim=-2, p=1.0)
+            ]
+            aug = transforms.Compose(aug)
 
-        # Train
-        if wandb_log:
-            utils.wandb_init(project_name, hyperparams=vars(args))
-        best_epoch = 0
-        best_loss = 1e6
-        for e in range(args.epochs):
-            print(f"\n================================\n"
-                  f"Epoch {e}")
-            if (e - best_epoch) >= args.patience+1:
-                print(f'Loss has not improved for {args.patience} epochs. Training has stopped')
-                print(f'Best loss was {best_loss} @ epoch {best_epoch}')
-                break
-            avg_epoch_loss = []
-            if e > 0:
-                if args.use_iipp:
-                    train_loader.dataset.create_iipp_map_df()
-            for images, _ in tqdm(train_loader):
-                # images = torch.randn(20, 3, 256, 256)
-                # with torch.autocast(device_type=f'cuda:{args.gpu_index}', dtype=torch.float16):
-                # with torch.autograd.detect_anomaly():
-                if args.use_iipp:
-                    images, meta_data = images
-                images = images.to(args.device)
-                loss = learner(images)
-                opt.zero_grad()
-                loss.backward()
-                opt.step()
-                learner.update_moving_average() # update moving average of target encoder
-                avg_epoch_loss.append(loss)
+            learner = BYOL_custom(
+                feature_model.cuda(args.gpu_index),
+                ch_in=args.img_channel,
+                use_iipp=args.use_iipp,
+                image_size=args.img_size,
+                hidden_layer=feature_layer,
+                augment_fn=aug,
+                augment_fn2=aug
+            )
 
-                ########################################
-                # DEBUG
-                # Check if any weight is none
-                # named_parameters = {n: p for (n, p) in list(learner.online_encoder.named_parameters())}
-                # for name, param in named_parameters.items():
-                #     if not torch.isfinite(param.data).all():
-                #         print(f"{name} has invalid parameters")
-                #     if param.grad is None:
-                #         print(f"{name} has no gradients")
-                #     elif not torch.isfinite(param.grad.data).all():
-                #         print(f"{name} has invalid gradients")
-                ########################################
+            # opt = torch.optim.Adam(learner.parameters(), lr=args.lr) # , eps=6e-5)
+            opt = torch.optim.AdamW(learner.parameters(), lr=args.lr)
+            # opt = torch.optim.SGD(learner.parameters(), lr=args.lr)
+
+            # Train
+            if wandb_log:
+                utils.wandb_init(project_name, hyperparams=vars(args))
+            best_epoch = 0
+            best_loss = 1e6
+            for e in range(args.epochs):
+                print(f"\n================================\n"
+                      f"Epoch {e}")
+                if (e - best_epoch) >= args.patience+1:
+                    print(f'Loss has not improved for {args.patience} epochs. Training has stopped')
+                    print(f'Best loss was {best_loss} @ epoch {best_epoch}')
+                    break
+                avg_epoch_loss = []
+                if e > 0:
+                    if args.use_iipp:
+                        train_loader.dataset.create_iipp_map_df()
+                for images, _ in tqdm(train_loader):
+                    # images = torch.randn(20, 3, 256, 256)
+                    # with torch.autocast(device_type=f'cuda:{args.gpu_index}', dtype=torch.float16):
+                    # with torch.autograd.detect_anomaly():
+                    if args.use_iipp:
+                        images, meta_data = images
+                    images = images.to(args.device)
+                    loss = learner(images)
+                    opt.zero_grad()
+                    loss.backward()
+                    opt.step()
+                    learner.update_moving_average() # update moving average of target encoder
+                    avg_epoch_loss.append(loss)
+
+                    ########################################
+                    # DEBUG
+                    # Check if any weight is none
+                    # named_parameters = {n: p for (n, p) in list(learner.online_encoder.named_parameters())}
+                    # for name, param in named_parameters.items():
+                    #     if not torch.isfinite(param.data).all():
+                    #         print(f"{name} has invalid parameters")
+                    #     if param.grad is None:
+                    #         print(f"{name} has no gradients")
+                    #     elif not torch.isfinite(param.grad.data).all():
+                    #         print(f"{name} has invalid gradients")
+                    ########################################
+
+                    if wandb_log:
+                        utils.wandb_log('batch', loss=loss)
+
+                avg_epoch_loss = float(torch.mean(torch.stack(avg_epoch_loss)).cpu().detach().numpy())
+                if avg_epoch_loss < best_loss:
+                    print(f'New best loss achieved @ epoch {e}: {avg_epoch_loss}')
+                    best_epoch = e
+                    best_loss = avg_epoch_loss
+                    torch.save(feature_model.state_dict(), save_folder.joinpath(f'byol_best_loss{cv_split_str}.pt'))
+                if (e+1)%10 == 0:
+                    # torch.save(feature_model.state_dict(), save_folder.joinpath('byol_{:04d}.pth.tar'.format(e)))
+                    pass
 
                 if wandb_log:
-                    utils.wandb_log('batch', loss=loss)
+                    utils.wandb_log('epoch', loss=avg_epoch_loss, best=best_epoch, best_loss=best_loss)
 
-            avg_epoch_loss = float(torch.mean(torch.stack(avg_epoch_loss)).cpu().detach().numpy())
-            if avg_epoch_loss < best_loss:
-                print(f'New best loss achieved @ epoch {e}: {avg_epoch_loss}')
-                best_epoch = e
-                best_loss = avg_epoch_loss
-                torch.save(feature_model.state_dict(), save_folder.joinpath(f'byol_best_loss.pt'))
-            if (e+1)%10 == 0:
-                torch.save(feature_model.state_dict(), save_folder.joinpath('byol_{:04d}.pth.tar'.format(e)))
-
-            if wandb_log:
-                utils.wandb_log('epoch', loss=avg_epoch_loss, best=best_epoch, best_loss=best_loss)
-
-        # save your improved network
-        torch.save(feature_model.state_dict(), save_folder.joinpath('byol_{:04d}_last.pth.tar'.format(e)))
-        # Update best model name to include epoch
-        best_weights_path = save_folder.joinpath(f'byol_best_loss.pt')
-        best_weights_path.rename(best_weights_path.parent.joinpath(f'byol_best_loss_{best_epoch:04d}.pt'))
+            # save your improved network
+            torch.save(feature_model.state_dict(), save_folder.joinpath(f'byol_{e:04d}_last{cv_split_str}.pth.tar'))
+            # Update best model name to include epoch
+            best_weights_path = save_folder.joinpath(f'byol_best_loss{cv_split_str}.pt')
+            best_weights_path.rename(best_weights_path.parent.joinpath(f'byol_best_loss_{best_epoch:04d}{cv_split_str}.pt'))

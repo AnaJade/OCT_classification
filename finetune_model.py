@@ -35,7 +35,7 @@ from SimCLR.models.resnet_simclr import FeatureModelSimCLR
 parent_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(parent_dir))
 import utils
-from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround, NormTransform, get_cross_valid_splits
+from utils_data import get_supervised_oct_data_loaders, build_image_root, RandomWrapAround, NormTransform, get_cross_valid_splits, get_lab_data_splits
 
 img_size_dict = {'stl10': 96,
                  'cifar10': 32,
@@ -365,6 +365,13 @@ def main():
         # Generate cross-validation split
         # cv_splits = get_cross_valid_splits(args, k=3)
         cv_splits = [None]
+    elif args.dataset_name == 'oct':
+        cv_splits = get_lab_data_splits(args)
+        lbl_abbs = {'chicken_heart_muscle': 'chm',
+                    'lamb_heart_fat': 'lhf',
+                    'lamb_heart_muscle': 'lhm',
+                    'lamb_liver': 'll',
+                    'lamb_testicle': 'lt'}
     else:
         cv_splits = [None]
 
@@ -377,6 +384,12 @@ def main():
             print(f"Split {i}")
             print(cv_split)
             cv_split_str = f'_split{i}'
+            if args.dataset_name == 'oct':
+                cv_split_str = f"_split_{'_'.join([lbl_abbs[l] for l in cv_split])}"
+                # Update args.labels_dict
+                labels = list(cv_split)
+                args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
+
         if 'oct' in args.dataset_name:
             # train_aug = [v2.RandomEqualize(p=0.98)]
             train_aug = [
