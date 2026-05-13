@@ -203,6 +203,7 @@ if __name__ == "__main__":
                 # Update args.labels_dict
                 labels = list(cv_split)
                 args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
+                num_cluster_dict['oct'] = len(labels)
 
         # Dataloader
         if args.dataset_name == 'oct':
