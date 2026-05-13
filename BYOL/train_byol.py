@@ -9,6 +9,7 @@ from sys import platform
 import socket
 
 import timm
+import wandb
 from addict import Dict
 from tqdm import tqdm
 
@@ -345,3 +346,7 @@ if __name__ == "__main__":
             # Update best model name to include epoch
             best_weights_path = save_folder.joinpath(f'byol_best_loss{cv_split_str}.pt')
             best_weights_path.rename(best_weights_path.parent.joinpath(f'byol_best_loss_{best_epoch:04d}{cv_split_str}.pt'))
+
+            # End wandb run
+            if wandb_log:
+                wandb.finish()
