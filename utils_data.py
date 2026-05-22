@@ -172,7 +172,7 @@ class OCTDataset(Dataset): # Used in train_moco
             self.map_df.loc[:, 'subset_id'] = self.map_df.groupby(['area_id', 'trajectory']).cumcount()
             self.map_df.loc[:, 'subset'] = ''
             mod = int(np.round(1/self.ratio_sup))
-            sup = int(mod-1)
+            sup = 0 # int(mod-1)
             # Reserve 10% of data for supervised training
             self.map_df.loc[self.map_df['subset_id'] % mod == sup, 'subset'] = f'{split}_supervised'
             self.map_df.loc[self.map_df['subset'] != f'{split}_supervised', 'subset'] = split

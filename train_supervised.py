@@ -89,7 +89,7 @@ class FullSupervisedModel(SupervisedModel):
             self.model = utils.update_backbone_channel(self.model, args.img_channel)
 
         self.save_folder = self.args.save_folder
-        self.finetune_best_weights_path = self.args.save_folder.joinpath(f'supervised_best_loss_{args.dataset_name}.pt')
+        self.finetune_best_weights_path = self.args.save_folder.joinpath(f'supervised_best_loss_{args.dataset_name}_sup{int(self.args.ratio_sup*100):03d}.pt')
         if self.finetune_best_weights_path.exists():
             self.finetune_best_weights = torch.load(self.finetune_best_weights_path, map_location=self.args.device)
         else:
@@ -261,7 +261,7 @@ def main():
             if args.dataset_name == 'oct':
                 cv_split_str = f"_split_{'_'.join([lbl_abbs[l] for l in cv_split])}"
                 # Update args.labels_dict
-                labels = list(cv_split)
+                labels = [l for l in labels if l not in cv_split]
                 args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
 
         if 'oct' in args.dataset_name:

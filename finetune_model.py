@@ -106,7 +106,7 @@ class SupervisedModel(object):
                                             img_channel=args.img_channel)
             # Skip changing the first layer, already done in FeatureModelSimCLR
         self.save_folder = self.args.save_folder
-        self.finetune_best_weights_path = self.args.save_folder.joinpath(f'finetune_best_loss_{args.dataset_name}.pt')
+        self.finetune_best_weights_path = self.args.save_folder.joinpath(f'finetune_best_loss_{args.dataset_name}_sup{int(self.args.ratio_sup*100):03d}.pt')
         if self.finetune_best_weights_path.exists():
             self.finetune_best_weights = torch.load(self.finetune_best_weights_path, map_location=self.args.device)
         else:
@@ -387,8 +387,14 @@ def main():
             if args.dataset_name == 'oct':
                 cv_split_str = f"_split_{'_'.join([lbl_abbs[l] for l in cv_split])}"
                 # Update args.labels_dict
-                labels = list(cv_split)
+                labels = [l for l in labels if l not in cv_split]
                 args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
+                if args.approach == 'byol':
+                    chkpt_file = list(chkpt_file.parent.glob(f'byol_best_loss*{cv_split_str}.pt'))[0]
+                    # chkpt_file = list(args.save_folder.glob('byol_best_loss*.pt'))[-1]
+                elif args.approach == 'simclr':
+                    chkpt_file = list(chkpt_file.parent.glob(f'checkpoint_best*{cv_split_str}.pt'))[0]
+                    # chkpt_file = list(args.save_folder.glob('checkpoint_best*.pt'))[-1]
 
         if 'oct' in args.dataset_name:
             # train_aug = [v2.RandomEqualize(p=0.98)]
