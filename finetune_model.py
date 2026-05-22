@@ -387,7 +387,7 @@ def main():
             if args.dataset_name == 'oct':
                 cv_split_str = f"_split_{'_'.join([lbl_abbs[l] for l in cv_split])}"
                 # Update args.labels_dict
-                labels = [l for l in labels if l not in cv_split]
+                labels = [l for l in lbl_abbs.keys() if l not in cv_split]
                 args.labels_dict = {i: lbl for i, lbl in enumerate(labels)}
                 if args.approach == 'byol':
                     chkpt_file = list(chkpt_file.parent.glob(f'byol_best_loss*{cv_split_str}.pt'))[0]
