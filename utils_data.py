@@ -415,7 +415,7 @@ def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size,
                               num_workers=0, drop_last=False, shuffle=False)
 
-    test_dataset = OCTDataset(root_path, 'test',
+    test_dataset = OCTDataset(root_path, split_names[2],
                               args.map_df_paths, args.labels_dict,
                               ch_in=args.img_channel,
                               sample_within_image=args.sample_within_image,

@@ -446,7 +446,7 @@ def main():
 
         # Finetune weights
         print(f"Finetune model")
-        if args.dataset_name == 'oct_clinical':
+        if 'oct' in args.dataset_name:
             # Define pos_weights
             # https://www.codegenes.net/blog/pytorch-bcewithlogitsloss-pos_weight/#handling-class-imbalance
             class_counts = train_loader.dataset.map_df.groupby('label').agg(img_count=('img_relative_path', 'count'))
