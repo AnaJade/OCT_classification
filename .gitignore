@@ -15,6 +15,10 @@ BYOL/*.pth
 BYOL/__pycache__
 BYOL/wandb
 BYOL/finetune_BYOL.py
+BYOL/ilmare_weights/
+BYOL/old_weights/
+DINOv3/ilmare_weights/
+DINOv3/old_weights/
 DINOv3/weights*
 DINOv3/__pycache__
 DINOv3/wandb
