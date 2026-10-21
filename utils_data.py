@@ -104,7 +104,11 @@ class OCTDataset(Dataset): # Used in train_moco
                 if supervised:
                     # Filter to keep only labels not in overwrite_split
                     # Keep only desired split
-                    self.map_df = map_dfs[~(map_dfs['label'].isin(overwrite_split)) & (map_dfs['subset'].str.contains(split))].copy()
+                    if len(labels_dict.keys()) == 3:
+                        # Case for supervised pretraining
+                        self.map_df = map_dfs[(map_dfs['label'].isin(overwrite_split)) & (map_dfs['subset'].str.contains(split))].copy()
+                    else:
+                        self.map_df = map_dfs[~(map_dfs['label'].isin(overwrite_split)) & (map_dfs['subset'].str.contains(split))].copy()
                 else:
                     # Filter to keep only labels within overwrite_split
                     # Keep imgs over all splits
@@ -318,7 +322,7 @@ class OCTDataset(Dataset): # Used in train_moco
         else:
             scan_path = self.root.joinpath(self.map_df['img_relative_path'].iloc[idx])
             label = int(self.map_df['label'].iloc[idx])
-            data = cv2.imread(scan_path)  # shape: (512, 512, 3)
+            data = cv2.imread(scan_path.__str__())  # shape: (512, 512, 3)
             # Crop image to designed idx start and end
             if self.sample_within_image > 1:
                 img_idx_start = self.map_df['img_idx_start'].iloc[idx]
@@ -360,7 +364,9 @@ class OCTDataset(Dataset): # Used in train_moco
 
 def get_oct_data_loaders(root_path:pathlib.Path, args:argparse.Namespace, batch_size:int, train_aug: list, test_aug:list,
                          mean:list, std:list, supervised=False, ratio_sup=1, shuffle=False, seq_split=False, overwrite_split=None):
-    img_transforms = [v2.ToTensor(),
+    img_transforms = [# v2.ToTensor(),
+                      v2.ToImage(),
+                      v2.ToDtype(torch.float32, scale=True),
                       v2.Resize((args.img_reshape, args.img_reshape), interpolation=InterpolationMode.BILINEAR),
                       NormTransform()
     ]

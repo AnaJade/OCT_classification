@@ -1,11 +1,14 @@
 .idea
+.vscode
 __pycache__/*
 SimCLR.zip
 *.png
 *.svg
+*.gif
 *.csv
 *.xlsx
 *.out
+*.pdf
 data_prep/__pycache__
 BYOL/weights*
 BYOL/*.pth
@@ -15,6 +18,8 @@ BYOL/finetune_BYOL.py
 DINOv3/weights*
 DINOv3/__pycache__
 DINOv3/wandb
+Konrad
+pretrain_supervised
 supervised
 supervised_lab_baseline
 supervised_4classes
