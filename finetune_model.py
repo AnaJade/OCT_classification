@@ -363,8 +363,8 @@ def main():
 
     if args.dataset_name == 'oct_clinical':
         # Generate cross-validation split
-        # cv_splits = get_cross_valid_splits(args, k=3)
-        cv_splits = [None]
+        cv_splits = get_cross_valid_splits(args, k=5)
+        # cv_splits = [None]
     elif args.dataset_name == 'oct':
         cv_splits = get_lab_data_splits(args)
         lbl_abbs = {'chicken_heart_muscle': 'chm',
@@ -484,6 +484,9 @@ def main():
         preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
 
         # Calculate metrics
+        if len(cv_splits) > 1:
+            print(f"Split {i}")
+            print(cv_split)
         print(f"Test set results using {args.arch} backbone \n(Finetune from {args.approach}, with {args.ratio_sup*100}% of {args.dataset_name}):")
         report = classification_report(test_labels, test_preds, target_names=labels, digits=4, zero_division=np.nan)
         print(report)

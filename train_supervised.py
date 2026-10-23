@@ -237,8 +237,8 @@ def main():
 
     if args.dataset_name == 'oct_clinical':
         # Generate cross-validation split
-        # cv_splits = get_cross_valid_splits(args, k=3)
-        cv_splits = [None]
+        cv_splits = get_cross_valid_splits(args, k=5)
+        # cv_splits = [None]
     elif args.dataset_name == 'oct':
         cv_splits = get_lab_data_splits(args)
         lbl_abbs = {'chicken_heart_muscle': 'chm',
@@ -399,6 +399,10 @@ def main():
         preds_df = preds_df.drop(columns=['pred_labels'])
         preds_path = f'preds_{args.dataset_name}_{int(args.ratio_sup*100)}p{weight_init_str}{cv_split_str}.csv'
         preds_df.to_csv(args.save_folder.joinpath(preds_path), index=False)
+
+        if len(cv_splits) > 1:
+            print(f"Split {i}")
+            print(cv_split)
 
         # Calculate metrics
         metrics_init_weight_str = '' if args.weight_init is None else f' starting from  {args.weight_init} weights'

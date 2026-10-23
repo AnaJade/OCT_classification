@@ -15,7 +15,7 @@ import matplotlib
 from tqdm import tqdm
 from typing import Union
 
-if (platform == "linux" or platform == "linux2") and ('hpc' in socket.gethostname() or 'u00' in socket.gethostname()):
+if (platform == "linux" or platform == "linux2"): #  and ('hpc' in socket.gethostname() or 'u00' in socket.gethostname()):
     matplotlib.use('Agg')
 else:
     matplotlib.use("TkAgg")
@@ -501,7 +501,7 @@ def get_cross_valid_splits(args:argparse.Namespace, k: int) -> list:
                 img_count_per_subset.loc[img_count_per_subset['subset'] == s, 'ratio_diff'] = ratio_lesion - ratio_healthy
             # Overall ratio -> Healthy = 0.428, Lesion = 0.572
             # Base diff: Train_diff = 0.092, Valid_diff = 0.0898, Test_diff = 0.275
-            if (img_count_per_subset['ratio_diff'].max() < 0.3) and (img_count_per_subset['ratio_diff'].min() > 0):
+            if (img_count_per_subset['ratio_diff'].max() < 0.5) and (img_count_per_subset['ratio_diff'].min() > -0.5):
                 splits.append(cv_split)
                 assert len([p for ps in splits[i + 1].values() for p in ps]) == len(
                     list(set([p for ps in splits[i + 1].values() for p in ps])))
